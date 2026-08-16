@@ -1,0 +1,145 @@
+.resume-uploader {
+  margin-bottom: 1.5rem;
+}
+
+.upload-help {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 180px;
+  padding: 2rem;
+  background: var(--color-surface);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.is-dragging {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.upload-dropzone-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.upload-dropzone-title {
+  font-weight: 600;
+}
+
+.upload-dropzone-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.selected-file {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+}
+
+.selected-file-icon {
+  font-size: 1.8rem;
+}
+
+.selected-file-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-file-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-file-meta {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.selected-file-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.extracted-text {
+  margin-top: 1.5rem;
+}
+
+.extracted-text-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.extracted-text-header h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.extracted-text-header span {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.extracted-text-preview {
+  max-height: 420px;
+  overflow: auto;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 899px) {
+  .selected-file {
+    flex-wrap: wrap;
+  }
+
+  .selected-file-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

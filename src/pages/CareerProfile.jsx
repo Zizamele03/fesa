@@ -2,6 +2,7 @@ import Button from '../components/Button.jsx';
 import SectionCard from '../components/SectionCard.jsx';
 import Badge from '../components/Badge.jsx';
 import PageHeader from '../components/PageHeader.jsx';
+import ResumeUploader from '../components/ResumeUploader.jsx';
 import { careerProfile } from '../data/demoData.js';
 
 export default function CareerProfile() {
@@ -23,13 +24,7 @@ export default function CareerProfile() {
         description="Your reusable professional profile. Fesa uses only the information you provide to tailor resumes and cover letters."
       />
 
-      <div className="upload-area">
-        <div>
-          <h2>Upload Resume</h2>
-          <p>Use an existing resume to quickly populate your Career Profile.</p>
-        </div>
-        <Button variant="secondary">Browse Files</Button>
-      </div>
+      <ResumeUploader />
 
       <SectionCard
         title="Personal Information"
