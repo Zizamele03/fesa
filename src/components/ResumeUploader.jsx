@@ -8,10 +8,10 @@ import {
   formatFileSize,
   getFileExtension,
   validateResumeFile,
-} from '../service/documentParser.js';
+} from '../services/documentParser.js';
 import './ResumeUploader.css';
 
-export default function ResumeUploader() {
+export default function ResumeUploader({ onExtractedText }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [status, setStatus] = useState('idle');
   const [extractedText, setExtractedText] = useState('');
@@ -73,6 +73,7 @@ export default function ResumeUploader() {
       setExtractedText(text);
       setStatus('success');
       clearError();
+      if (onExtractedText) onExtractedText(text);
     } catch (error) {
       if (
         currentExtractionId !== extractionIdRef.current ||
@@ -124,6 +125,7 @@ export default function ResumeUploader() {
     setExtractedText('');
     setStatus('idle');
     setErrorMessage('');
+    if (onExtractedText) onExtractedText('');
     if (inputRef.current) inputRef.current.value = '';
   }
 

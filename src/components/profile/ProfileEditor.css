@@ -1,0 +1,105 @@
+.profile-editor .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.profile-editor .form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.profile-editor .form-grid input,
+.profile-editor .form-grid textarea {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-text);
+  background: #fff;
+}
+
+.profile-editor .form-grid textarea {
+  min-height: 70px;
+}
+
+.profile-editor .form-grid .checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-editor .section-empty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.profile-editor .editor-item {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+}
+
+.profile-editor .editor-item:last-child {
+  margin-bottom: 0;
+}
+
+.profile-editor .editor-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.profile-editor .editor-item-header h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.skill-editor-group {
+  margin-bottom: 1.5rem;
+}
+
+.skill-editor-group:last-child {
+  margin-bottom: 0;
+}
+
+.skill-editor-group h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.skill-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.skill-editor-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.skill-editor-row input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+@media (max-width: 899px) {
+  .profile-editor .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
