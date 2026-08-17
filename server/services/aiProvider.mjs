@@ -5,7 +5,7 @@ function isGeminiEndpoint(endpoint) {
   return endpoint.includes('generativelanguage.googleapis.com');
 }
 
-export async function chatCompletion({ messages, maxTokens = 16000 }) {
+export async function chatCompletion({ messages, maxTokens = 20000 }) {
   const apiKey = process.env.AI_API_KEY;
   const rawEndpoint = process.env.AI_API_ENDPOINT || DEFAULT_ENDPOINT;
   const model = process.env.AI_MODEL || DEFAULT_MODEL;
