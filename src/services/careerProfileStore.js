@@ -1,43 +1,16 @@
-const DB_NAME = 'FesaDB';
-const STORE_NAME = 'careerProfile';
-const PRIMARY_KEY = 'primary';
+import { runTransaction, STORES } from './indexedDb.js';
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error || new Error('Failed to open IndexedDB.'));
-  });
-}
-
-async function getStore(mode = 'readonly') {
-  const db = await openDatabase();
-  const transaction = db.transaction(STORE_NAME, mode);
-  const store = transaction.objectStore(STORE_NAME);
-  return { db, store };
-}
+const CAREER_PROFILE_ID = 'current';
 
 export async function loadProfile() {
   try {
-    const { db, store } = await getStore('readonly');
-    const result = await new Promise((resolve, reject) => {
-      const request = store.get(PRIMARY_KEY);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () =>
-        reject(request.error || new Error('Failed to load profile from IndexedDB.'));
-    });
+    const record = await runTransaction(
+      STORES.CAREER_PROFILE,
+      'readonly',
+      (store) => store.get(CAREER_PROFILE_ID),
+    );
 
-    db.close();
-    return result?.profile || null;
+    return record?.profile || null;
   } catch (error) {
     console.warn('Could not load profile from IndexedDB:', error);
     return null;
@@ -45,24 +18,22 @@ export async function loadProfile() {
 }
 
 export async function saveProfile(profile) {
-  try {
-    const { db, store } = await getStore('readwrite');
-    const record = {
-      id: PRIMARY_KEY,
-      updatedAt: new Date().toISOString(),
-      profile,
-    };
+  const record = {
+    id: CAREER_PROFILE_ID,
+    schemaVersion: profile.schemaVersion || 1,
+    updatedAt: new Date().toISOString(),
+    profile,
+  };
 
-    await new Promise((resolve, reject) => {
-      const request = store.put(record);
-      request.onsuccess = () => resolve();
-      request.onerror = () =>
-        reject(request.error || new Error('Failed to save profile to IndexedDB.'));
-    });
+  await runTransaction(STORES.CAREER_PROFILE, 'readwrite', (store) =>
+    store.put(record),
+  );
 
-    db.close();
-  } catch (error) {
-    console.warn('Could not save profile to IndexedDB:', error);
-    throw error;
-  }
+  return record;
+}
+
+export async function deleteProfile() {
+  await runTransaction(STORES.CAREER_PROFILE, 'readwrite', (store) =>
+    store.delete(CAREER_PROFILE_ID),
+  );
 }

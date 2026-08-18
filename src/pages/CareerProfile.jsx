@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PageHeader from '../components/PageHeader.jsx';
 import ResumeUploader from '../components/ResumeUploader.jsx';
 import ProfileEditor from '../components/profile/ProfileEditor.jsx';
@@ -8,6 +8,10 @@ import ErrorState from '../components/ErrorState.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { loadProfile, saveProfile } from '../services/careerProfileStore.js';
 import { extractCareerProfile } from '../services/careerProfileApi.js';
+import {
+  exportProfile,
+  importProfileFromFile,
+} from '../services/profileTransfer.js';
 import './CareerProfile.css';
 
 export default function CareerProfile() {
@@ -17,6 +21,9 @@ export default function CareerProfile() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildError, setBuildError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [importStatus, setImportStatus] = useState(null);
+
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,6 +90,52 @@ export default function CareerProfile() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      exportProfile(profile);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setImportStatus({
+        type: 'error',
+        message: error.message || 'Could not export Career Profile.',
+      });
+    }
+  };
+
+  const handleImportFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    setImportStatus(null);
+
+    try {
+      const importedProfile = await importProfileFromFile(file);
+
+      if (
+        profile &&
+        !window.confirm(
+          'Replace your current Career Profile with the imported profile?',
+        )
+      ) {
+        return;
+      }
+
+      await handleProfileChange(importedProfile);
+      setImportStatus({
+        type: 'success',
+        message: 'Career Profile imported successfully.',
+      });
+    } catch (error) {
+      console.error('Import failed:', error);
+      setImportStatus({
+        type: 'error',
+        message: error.message || 'Could not import Career Profile.',
+      });
+    }
+  };
+
   if (isLoadingProfile) {
     return (
       <div className="career-profile">
@@ -100,7 +153,39 @@ export default function CareerProfile() {
       <PageHeader
         title="Career Profile"
         description="Your reusable professional profile. Fesa uses only the information you provide to tailor resumes and cover letters."
+        actions={
+          <>
+            <Button onClick={handleExport} disabled={!profile}>
+              Export Profile
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => importInputRef.current?.click()}
+            >
+              Import Profile
+            </Button>
+          </>
+        }
       />
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        onChange={handleImportFileChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      {importStatus && (
+        <div className="profile-status">
+          <ErrorState
+            title={importStatus.type === 'success' ? 'Import complete' : 'Import failed'}
+            message={importStatus.message}
+          />
+        </div>
+      )}
 
       <ResumeUploader onExtractedText={handleExtractedText} />
 

@@ -7,6 +7,7 @@ import FormField from '../components/FormField.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import LoadingState from '../components/LoadingState.jsx';
 import { analyzeJobDescription } from '../services/jobAnalysisApi.js';
+import { createApplication } from '../services/applicationStore.js';
 
 export default function NewApplication() {
   const [companyName, setCompanyName] = useState('');
@@ -40,6 +41,18 @@ export default function NewApplication() {
         title: jobTitle.trim(),
         jobDescription: jobDescription.trim(),
       });
+
+      try {
+        await createApplication({
+          company: companyName.trim(),
+          jobTitle: jobTitle.trim(),
+          jobDescription: jobDescription.trim(),
+          jobAnalysis: analysis,
+        });
+      } catch (persistError) {
+        // The analysis succeeded; persistence should not block navigation.
+        console.warn('Could not save application:', persistError);
+      }
 
       navigate('/job-analysis', { state: { analysis } });
     } catch (error) {
