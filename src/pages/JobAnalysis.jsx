@@ -1,9 +1,15 @@
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import Badge from '../components/Badge.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import LoadingState from '../components/LoadingState.jsx';
+import { loadProfile } from '../services/careerProfileStore.js';
+import { updateApplication } from '../services/applicationStore.js';
+import { computeMatch } from '../services/matchEngine.js';
 
 function SkillGroup({ title, skills }) {
   const hasSkills =
@@ -49,7 +55,13 @@ function SkillGroup({ title, skills }) {
 
 function JobAnalysis() {
   const location = useLocation();
+  const navigate = useNavigate();
+
   const analysis = location.state?.analysis;
+  const applicationId = location.state?.applicationId;
+
+  const [isMatching, setIsMatching] = useState(false);
+  const [matchError, setMatchError] = useState('');
 
   if (!analysis) {
     return (
@@ -70,12 +82,66 @@ function JobAnalysis() {
 
   const { job, summary } = analysis;
 
+  const handleMatch = async () => {
+    setIsMatching(true);
+    setMatchError('');
+
+    try {
+      const profile = await loadProfile();
+
+      if (!profile) {
+        setMatchError(
+          'Build your Career Profile first before running a match analysis.',
+        );
+        return;
+      }
+
+      const matchAnalysis = computeMatch(profile, analysis);
+
+      if (applicationId) {
+        try {
+          await updateApplication(applicationId, { matchAnalysis });
+        } catch (persistError) {
+          console.warn('Could not save match analysis:', persistError);
+        }
+      }
+
+      navigate('/match-analysis', {
+        state: { matchAnalysis, jobAnalysis: analysis },
+      });
+    } catch (error) {
+      console.error('Match analysis error:', error);
+      setMatchError(
+        error.message || 'Unable to run match analysis. Please try again.',
+      );
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="Job Analysis"
         description={`${job.title} · ${job.company}`}
+        actions={
+          <Button onClick={handleMatch} disabled={isMatching}>
+            {isMatching ? 'Analyzing Match...' : 'Analyze My Match'}
+          </Button>
+        }
       />
+
+      {matchError && (
+        <div className="profile-status">
+          <ErrorState title="Match Analysis Error" message={matchError} />
+        </div>
+      )}
+
+      {isMatching && (
+        <div className="profile-status">
+          <LoadingState message="Running Match Analysis..." />
+        </div>
+      )}
 
       <div className="analysis-overview">
         <Card>

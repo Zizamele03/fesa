@@ -42,19 +42,21 @@ export default function NewApplication() {
         jobDescription: jobDescription.trim(),
       });
 
+      let applicationId;
+
       try {
-        await createApplication({
+        const application = await createApplication({
           company: companyName.trim(),
           jobTitle: jobTitle.trim(),
           jobDescription: jobDescription.trim(),
           jobAnalysis: analysis,
         });
+        applicationId = application.id;
       } catch (persistError) {
-        // The analysis succeeded; persistence should not block navigation.
         console.warn('Could not save application:', persistError);
       }
 
-      navigate('/job-analysis', { state: { analysis } });
+      navigate('/job-analysis', { state: { analysis, applicationId } });
     } catch (error) {
       console.error('Job analysis error:', error);
       setErrorMessage(

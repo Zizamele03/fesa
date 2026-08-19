@@ -5,6 +5,7 @@ import CareerProfile from './pages/CareerProfile.jsx';
 import NewApplication from './pages/NewApplication.jsx';
 import JobAnalysis from './pages/JobAnalysis.jsx';
 import ApplicationPackage from './pages/ApplicationPackage.jsx';
+import MatchAnalysis from './pages/MatchAnalysis.jsx';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="/career-profile" element={<CareerProfile />} />
           <Route path="/new-application" element={<NewApplication />} />
           <Route path="/job-analysis" element={<JobAnalysis />} />
+          <Route path="/match-analysis" element={<MatchAnalysis />} />
           <Route path="/application-package" element={<ApplicationPackage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
