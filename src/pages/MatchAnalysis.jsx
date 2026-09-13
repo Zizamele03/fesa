@@ -4,30 +4,41 @@ import Card from '../components/Card.jsx';
 import Badge from '../components/Badge.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import './MatchAnalysis.css';
 
-function RequirementItem({ item }) {
-  const statusTone = {
-    matched: 'success',
-    partial: 'warning',
-    missing: 'danger',
-    unverified: 'neutral',
+function relationshipTone(relationship) {
+  const map = {
+    EXACT_MATCH: 'success',
+    ALIAS_MATCH: 'success',
+    STRONG_CONTEXT_MATCH: 'success',
+    PARTIAL_MATCH: 'warning',
+    TRANSFERABLE: 'warning',
+    RELATED_BUT_DIFFERENT: 'warning',
+    MISSING: 'danger',
+    UNVERIFIED: 'neutral',
   };
 
+  return map[relationship] || 'neutral';
+}
+
+function RequirementItem({ item }) {
   return (
     <div className="requirement-item">
       <div className="requirement-item-header">
         <div>
           <span className="requirement-text">{item.requirement}</span>
           <div className="requirement-meta">
-            <Badge tone={statusTone[item.status] || 'neutral'}>
-              {item.status}
-            </Badge>
-            <span>{item.category}</span>
-            {item.importance === 'required' ? (
-              <span className="required-label">Required</span>
-            ) : (
-              <span>Preferred</span>
+            {item.relationship && (
+              <Badge tone={relationshipTone(item.relationship)}>
+                {item.relationship.replace(/_/g, ' ').toLowerCase()}
+              </Badge>
             )}
+            {item.importance && (
+              <span>
+                {item.importance === 'required' ? 'Required' : 'Preferred'}
+              </span>
+            )}
+            {item.category && <span>{item.category}</span>}
           </div>
         </div>
         <span className="requirement-score">{item.score}%</span>
@@ -110,8 +121,8 @@ export default function MatchAnalysis() {
           <p className="section-empty">No strong matches identified.</p>
         ) : (
           <div className="match-list">
-            {matchAnalysis.strongMatches.map((item) => (
-              <Card key={`strong-${item.requirement}`}>
+            {matchAnalysis.strongMatches.map((item, index) => (
+              <Card key={`strong-${item.requirement}-${index}`}>
                 <RequirementItem item={item} />
               </Card>
             ))}
@@ -125,8 +136,8 @@ export default function MatchAnalysis() {
           <p className="section-empty">No requirements found.</p>
         ) : (
           <div className="match-list">
-            {matchAnalysis.requirements.map((item) => (
-              <Card key={`req-${item.category}-${item.requirement}`}>
+            {matchAnalysis.requirements.map((item, index) => (
+              <Card key={`req-${item.requirement}-${index}`}>
                 <RequirementItem item={item} />
               </Card>
             ))}
@@ -141,11 +152,8 @@ export default function MatchAnalysis() {
             <p className="section-empty">No missing requirements.</p>
           ) : (
             <div className="match-list">
-              {matchAnalysis.missingRequirements.map((item) => (
-                <RequirementItem
-                  key={`missing-${item.requirement}`}
-                  item={item}
-                />
+              {matchAnalysis.missingRequirements.map((item, index) => (
+                <RequirementItem key={`missing-${item.requirement}-${index}`} item={item} />
               ))}
             </div>
           )}
@@ -157,11 +165,8 @@ export default function MatchAnalysis() {
             <p className="section-empty">No partial matches.</p>
           ) : (
             <div className="match-list">
-              {matchAnalysis.partialMatches.map((item) => (
-                <RequirementItem
-                  key={`partial-${item.requirement}`}
-                  item={item}
-                />
+              {matchAnalysis.partialMatches.map((item, index) => (
+                <RequirementItem key={`partial-${item.requirement}-${index}`} item={item} />
               ))}
             </div>
           )}
@@ -174,11 +179,8 @@ export default function MatchAnalysis() {
           <p className="section-empty">No unverified requirements.</p>
         ) : (
           <div className="match-list">
-            {matchAnalysis.unverifiedRequirements.map((item) => (
-              <RequirementItem
-                key={`unverified-${item.requirement}`}
-                item={item}
-              />
+            {matchAnalysis.unverifiedRequirements.map((item, index) => (
+              <RequirementItem key={`unverified-${item.requirement}-${index}`} item={item} />
             ))}
           </div>
         )}

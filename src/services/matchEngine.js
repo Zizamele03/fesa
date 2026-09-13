@@ -1,9 +1,11 @@
+import { canonicalizeSkill, STOP_WORDS } from './aliasMap.js';
+
 const WEIGHTS = {
   skills: 0.35,
   education: 0.15,
-  experience: 0.20,
+  experience: 0.2,
   projects: 0.15,
-  keywords: 0.10,
+  keywords: 0.1,
 };
 
 function normalizeText(value = '') {
@@ -17,7 +19,7 @@ function normalizeText(value = '') {
 function tokenize(value = '') {
   return normalizeText(value)
     .split(' ')
-    .filter((token) => token.length > 1);
+    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
 }
 
 function asArray(value) {
@@ -28,104 +30,230 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-function collectSkillEntries(skills) {
+function collectSkillEntries(profile) {
   const entries = [];
-  const source = asObject(skills);
+  const skillGroups = asObject(profile.skills);
 
-  for (const [category, list] of Object.entries(source)) {
+  Object.entries(skillGroups).forEach(([category, list]) => {
     asArray(list).forEach((skill, index) => {
       if (String(skill).trim()) {
         entries.push({
-          value: String(skill).trim(),
+          raw: String(skill).trim(),
+          canonical: canonicalizeSkill(skill),
           sourceType: 'skill',
           sourceId: `skill-${category}-${index}`,
           sourceTitle: `${category[0].toUpperCase()}${category.slice(1)} Skill`,
+          text: String(skill).trim(),
+        });
+      }
+    });
+  });
+
+  asArray(profile.projects).forEach((project, projectIndex) => {
+    asArray(project.technologies).forEach((tech, techIndex) => {
+      if (String(tech).trim()) {
+        entries.push({
+          raw: String(tech).trim(),
+          canonical: canonicalizeSkill(tech),
+          sourceType: 'project',
+          sourceId: `project-${project.id || projectIndex}-tech-${techIndex}`,
+          sourceTitle: project.name || 'Project',
+          text: String(tech).trim(),
+        });
+      }
+    });
+  });
+
+  asArray(profile.experience).forEach((job, jobIndex) => {
+    asArray(job.technologies).forEach((tech, techIndex) => {
+      if (String(tech).trim()) {
+        entries.push({
+          raw: String(tech).trim(),
+          canonical: canonicalizeSkill(tech),
+          sourceType: 'experience',
+          sourceId: `experience-${job.id || jobIndex}-tech-${techIndex}`,
+          sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
+          text: String(tech).trim(),
+        });
+      }
+    });
+  });
+
+  return entries;
+}
+
+function collectAllProfileTextSources(profile) {
+  const sources = [];
+
+  if (profile.professionalSummary) {
+    sources.push({
+      sourceType: 'career_profile',
+      sourceId: 'summary',
+      sourceTitle: 'Professional Summary',
+      text: String(profile.professionalSummary),
+    });
+  }
+
+  asArray(profile.experience).forEach((job, index) => {
+    const text = [
+      job.description,
+      ...asArray(job.responsibilities),
+      ...asArray(job.achievements),
+      ...asArray(job.technologies),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    if (text) {
+      sources.push({
+        sourceType: 'experience',
+        sourceId: job.id || `experience-${index}`,
+        sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
+        text,
+      });
+    }
+  });
+
+  asArray(profile.projects).forEach((project, index) => {
+    const text = [
+      project.description,
+      ...asArray(project.technologies),
+      ...asArray(project.achievements),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    if (text) {
+      sources.push({
+        sourceType: 'project',
+        sourceId: project.id || `project-${index}`,
+        sourceTitle: project.name || 'Project',
+        text,
+      });
+    }
+  });
+
+  return sources;
+}
+
+function findSkillEvidence(requirement, profile) {
+  const targetCanonical = canonicalizeSkill(requirement);
+  const allEntries = collectSkillEntries(profile);
+  const evidence = [];
+
+  for (const entry of allEntries) {
+    if (entry.canonical === targetCanonical) {
+      evidence.push({
+        sourceType: entry.sourceType,
+        sourceId: entry.sourceId,
+        sourceTitle: entry.sourceTitle,
+        text: entry.text,
+        raw: entry.raw,
+        canonical: entry.canonical,
+      });
+    }
+  }
+
+  return evidence.slice(0, 3);
+}
+
+function matchSkillRequirement(requirement, profile, importance) {
+  const rawRequirement = String(requirement).trim();
+  if (!rawRequirement) return null;
+
+  const targetCanonical = canonicalizeSkill(rawRequirement);
+  const directEvidence = findSkillEvidence(rawRequirement, profile);
+  const isAlias = directEvidence.some(
+    (evidence) => canonicalizeSkill(evidence.raw) === targetCanonical &&
+      normalizeText(evidence.raw) !== targetCanonical,
+  );
+
+  if (directEvidence.length > 0) {
+    return {
+      requirement: rawRequirement,
+      category: 'skills',
+      importance,
+      status: 'matched',
+      relationship: isAlias ? 'ALIAS_MATCH' : 'EXACT_MATCH',
+      score: 100,
+      evidence: directEvidence,
+    };
+  }
+
+  const textSources = collectAllProfileTextSources(profile);
+  const requirementTokens = tokenize(rawRequirement).filter(
+    (token) => token !== targetCanonical && !STOP_WORDS.has(token),
+  );
+
+  let contextEvidence = [];
+
+  if (requirementTokens.length > 0) {
+    for (const source of textSources) {
+      const normalizedText = normalizeText(source.text);
+      const allTokensPresent = requirementTokens.every((token) =>
+        normalizedText.includes(token),
+      );
+
+      if (allTokensPresent) {
+        contextEvidence.push({
+          sourceType: source.sourceType,
+          sourceId: source.sourceId,
+          sourceTitle: source.sourceTitle,
+          text: source.text,
+        });
+      }
+    }
+  } else if (targetCanonical) {
+    for (const source of textSources) {
+      const normalizedText = normalizeText(source.text);
+      if (normalizedText.includes(targetCanonical)) {
+        contextEvidence.push({
+          sourceType: source.sourceType,
+          sourceId: source.sourceId,
+          sourceTitle: source.sourceTitle,
+          text: source.text,
+        });
+      }
+    }
+  }
+
+  if (contextEvidence.length > 0) {
+    return {
+      requirement: rawRequirement,
+      category: 'skills',
+      importance,
+      status: 'matched',
+      relationship: 'STRONG_CONTEXT_MATCH',
+      score: 80,
+      evidence: contextEvidence.slice(0, 3),
+    };
+  }
+
+  return {
+    requirement: rawRequirement,
+    category: 'skills',
+    importance,
+    status: 'missing',
+    relationship: 'MISSING',
+    score: 0,
+    evidence: [],
+  };
+}
+
+function matchSkillsObject(skills, profile, importance) {
+  const results = [];
+
+  for (const [category, list] of Object.entries(asObject(skills))) {
+    asArray(list).forEach((skill) => {
+      const result = matchSkillRequirement(skill, profile, importance);
+      if (result) {
+        results.push({
+          ...result,
+          category: `skills.${category}`,
         });
       }
     });
   }
 
-  return entries;
-}
-
-function collectProjectTechnologyEntries(projects) {
-  const entries = [];
-
-  asArray(projects).forEach((project, projectIndex) => {
-    const technologies = asArray(project.technologies);
-    technologies.forEach((tech, techIndex) => {
-      if (String(tech).trim()) {
-        entries.push({
-          value: String(tech).trim(),
-          sourceType: 'project',
-          sourceId: `project-${project.id || projectIndex}-tech-${techIndex}`,
-          sourceTitle: project.name || 'Project',
-        });
-      }
-    });
-  });
-
-  return entries;
-}
-
-function collectExperienceTechnologyEntries(experience) {
-  const entries = [];
-
-  asArray(experience).forEach((job, jobIndex) => {
-    const technologies = asArray(job.technologies);
-    technologies.forEach((tech, techIndex) => {
-      if (String(tech).trim()) {
-        entries.push({
-          value: String(tech).trim(),
-          sourceType: 'experience',
-          sourceId: `experience-${job.id || jobIndex}-tech-${techIndex}`,
-          sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
-        });
-      }
-    });
-  });
-
-  return entries;
-}
-
-function findEvidenceForSkill(skill, profile) {
-  const target = normalizeText(skill);
-  const evidence = [];
-
-  collectSkillEntries(profile.skills).forEach((entry) => {
-    if (normalizeText(entry.value) === target) {
-      evidence.push({
-        sourceType: entry.sourceType,
-        sourceId: entry.sourceId,
-        sourceTitle: entry.sourceTitle,
-        text: entry.value,
-      });
-    }
-  });
-
-  collectProjectTechnologyEntries(profile.projects).forEach((entry) => {
-    if (normalizeText(entry.value) === target) {
-      evidence.push({
-        sourceType: entry.sourceType,
-        sourceId: entry.sourceId,
-        sourceTitle: entry.sourceTitle,
-        text: entry.value,
-      });
-    }
-  });
-
-  collectExperienceTechnologyEntries(profile.experience).forEach((entry) => {
-    if (normalizeText(entry.value) === target) {
-      evidence.push({
-        sourceType: entry.sourceType,
-        sourceId: entry.sourceId,
-        sourceTitle: entry.sourceTitle,
-        text: entry.value,
-      });
-    }
-  });
-
-  return evidence.slice(0, 3);
+  return results;
 }
 
 function getEducationLevel(text) {
@@ -164,16 +292,16 @@ function getEducationField(text) {
   return fields.find((field) => normalized.includes(field)) || '';
 }
 
-function matchEducationRequirement(requirement, education) {
-  const normalizedRequirement = normalizeText(requirement);
-  const requiredLevel = getEducationLevel(normalizedRequirement);
-  const requiredField = getEducationField(normalizedRequirement);
+function matchEducationRequirement(requirement, profile) {
+  const rawRequirement = String(requirement).trim();
+  const requiredLevel = getEducationLevel(rawRequirement);
+  const requiredField = getEducationField(rawRequirement);
 
   const evidence = [];
   let matched = false;
   let partial = false;
 
-  asArray(education).forEach((edu, index) => {
+  asArray(profile.education).forEach((edu, index) => {
     const itemText = normalizeText(
       `${edu.qualification || ''} ${edu.fieldOfStudy || ''} ${edu.institution || ''}`,
     );
@@ -183,16 +311,13 @@ function matchEducationRequirement(requirement, education) {
     const levelMatch = requiredLevel && itemLevel === requiredLevel;
     const fieldMatch = requiredField && itemField === requiredField;
 
-    if (levelMatch && fieldMatch) {
-      matched = true;
-    } else if (levelMatch || fieldMatch) {
-      partial = true;
-    }
+    if (levelMatch && fieldMatch) matched = true;
+    else if (levelMatch || fieldMatch) partial = true;
 
     if (matched || partial) {
       evidence.push({
         sourceType: 'education',
-        sourceId: `education-${edu.id || index}`,
+        sourceId: edu.id || `education-${index}`,
         sourceTitle: `${edu.qualification || ''} ${edu.fieldOfStudy || ''}`.trim(),
         text: `${edu.qualification || ''} ${edu.fieldOfStudy || ''} - ${edu.institution || ''}`.trim(),
       });
@@ -200,181 +325,269 @@ function matchEducationRequirement(requirement, education) {
   });
 
   if (matched) {
-    return { status: 'matched', score: 100, evidence: evidence.slice(0, 1) };
+    return {
+      requirement: rawRequirement,
+      category: 'education',
+      importance: 'required',
+      status: 'matched',
+      relationship: 'EXACT_MATCH',
+      score: 100,
+      evidence: evidence.slice(0, 1),
+    };
   }
 
   if (partial) {
-    return { status: 'partial', score: 50, evidence: evidence.slice(0, 1) };
+    return {
+      requirement: rawRequirement,
+      category: 'education',
+      importance: 'required',
+      status: 'partial',
+      relationship: 'PARTIAL_MATCH',
+      score: 50,
+      evidence: evidence.slice(0, 1),
+    };
   }
 
-  return { status: 'missing', score: 0, evidence: [] };
+  return {
+    requirement: rawRequirement,
+    category: 'education',
+    importance: 'required',
+    status: 'missing',
+    relationship: 'MISSING',
+    score: 0,
+    evidence: [],
+  };
 }
 
 function buildExperienceText(experienceItem) {
   return normalizeText(
     [
       experienceItem.description,
-      ...(asArray(experienceItem.responsibilities)),
-      ...(asArray(experienceItem.achievements)),
-      ...(asArray(experienceItem.technologies)),
+      ...asArray(experienceItem.responsibilities),
+      ...asArray(experienceItem.achievements),
+      ...asArray(experienceItem.technologies),
     ].join(' '),
   );
+}
+
+function matchExperienceRequirement(requirement, profile) {
+  const rawRequirement = String(requirement).trim();
+  const requirementTokens = tokenize(rawRequirement).filter(
+    (token) => token.length > 2 && !STOP_WORDS.has(token),
+  );
+
+  if (requirementTokens.length === 0) {
+    return {
+      requirement: rawRequirement,
+      category: 'experience',
+      importance: 'required',
+      status: 'unverified',
+      relationship: 'UNVERIFIED',
+      score: 0,
+      evidence: [],
+    };
+  }
+
+  let bestRatio = 0;
+  let bestEvidence = [];
+
+  asArray(profile.experience).forEach((job, index) => {
+    const text = buildExperienceText(job);
+    const matchedTokens = requirementTokens.filter((token) =>
+      text.includes(token),
+    );
+    const ratio = matchedTokens.length / requirementTokens.length;
+
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestEvidence = [
+        {
+          sourceType: 'experience',
+          sourceId: job.id || `experience-${index}`,
+          sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
+          text: job.description || `${job.position || 'Role'} at ${job.company || 'Company'}`,
+        },
+      ];
+    }
+  });
+
+  if (bestRatio >= 0.6) {
+    return {
+      requirement: rawRequirement,
+      category: 'experience',
+      importance: 'required',
+      status: 'matched',
+      relationship: 'STRONG_CONTEXT_MATCH',
+      score: Math.round(bestRatio * 100),
+      evidence: bestEvidence,
+    };
+  }
+
+  if (bestRatio >= 0.35) {
+    return {
+      requirement: rawRequirement,
+      category: 'experience',
+      importance: 'required',
+      status: 'partial',
+      relationship: 'PARTIAL_MATCH',
+      score: Math.round(bestRatio * 100),
+      evidence: bestEvidence,
+    };
+  }
+
+  return {
+    requirement: rawRequirement,
+    category: 'experience',
+    importance: 'required',
+    status: 'missing',
+    relationship: 'MISSING',
+    score: 0,
+    evidence: [],
+  };
 }
 
 function buildProjectText(project) {
   return normalizeText(
     [
       project.description,
-      ...(asArray(project.technologies)),
-      ...(asArray(project.achievements)),
+      ...asArray(project.technologies),
+      ...asArray(project.achievements),
     ].join(' '),
   );
 }
 
-function matchExperienceRequirement(requirement, experience) {
-  const tokens = tokenize(requirement).filter((token) => token.length > 2);
-  if (tokens.length === 0) {
-    return { status: 'unverified', score: 0, evidence: [] };
+function matchProjectRequirement(requirement, profile) {
+  const rawRequirement = String(requirement).trim();
+  const requirementTokens = tokenize(rawRequirement).filter(
+    (token) => token.length > 2 && !STOP_WORDS.has(token),
+  );
+
+  if (requirementTokens.length === 0) {
+    return {
+      requirement: rawRequirement,
+      category: 'projects',
+      importance: 'preferred',
+      status: 'unverified',
+      relationship: 'UNVERIFIED',
+      score: 0,
+      evidence: [],
+    };
   }
 
-  const evidence = [];
   let bestRatio = 0;
+  let bestEvidence = [];
 
-  asArray(experience).forEach((job, index) => {
-    const text = buildExperienceText(job);
-    const matchedTokens = tokens.filter((token) => text.includes(token));
-    const ratio = matchedTokens.length / tokens.length;
-
-    if (ratio > bestRatio) {
-      bestRatio = ratio;
-      evidence.length = 0;
-      evidence.push({
-        sourceType: 'experience',
-        sourceId: `experience-${job.id || index}`,
-        sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
-        text: job.description || `${job.position || 'Role'} at ${job.company || 'Company'}`,
-      });
-    }
-  });
-
-  if (bestRatio >= 0.6) {
-    return { status: 'matched', score: Math.round(bestRatio * 100), evidence };
-  }
-
-  if (bestRatio >= 0.35) {
-    return { status: 'partial', score: Math.round(bestRatio * 100), evidence };
-  }
-
-  return { status: 'missing', score: 0, evidence: [] };
-}
-
-function matchProjectRequirement(requirement, projects) {
-  const tokens = tokenize(requirement).filter((token) => token.length > 2);
-  if (tokens.length === 0) {
-    return { status: 'unverified', score: 0, evidence: [] };
-  }
-
-  const evidence = [];
-  let bestRatio = 0;
-
-  asArray(projects).forEach((project, index) => {
+  asArray(profile.projects).forEach((project, index) => {
     const text = buildProjectText(project);
-    const matchedTokens = tokens.filter((token) => text.includes(token));
-    const ratio = matchedTokens.length / tokens.length;
+    const matchedTokens = requirementTokens.filter((token) =>
+      text.includes(token),
+    );
+    const ratio = matchedTokens.length / requirementTokens.length;
 
     if (ratio > bestRatio) {
       bestRatio = ratio;
-      evidence.length = 0;
-      evidence.push({
-        sourceType: 'project',
-        sourceId: `project-${project.id || index}`,
-        sourceTitle: project.name || 'Project',
-        text: project.description || project.name || 'Project',
-      });
+      bestEvidence = [
+        {
+          sourceType: 'project',
+          sourceId: project.id || `project-${index}`,
+          sourceTitle: project.name || 'Project',
+          text: project.description || project.name || 'Project',
+        },
+      ];
     }
   });
 
   if (bestRatio >= 0.5) {
-    return { status: 'matched', score: Math.round(bestRatio * 100), evidence };
+    return {
+      requirement: rawRequirement,
+      category: 'projects',
+      importance: 'preferred',
+      status: 'matched',
+      relationship: 'STRONG_CONTEXT_MATCH',
+      score: Math.round(bestRatio * 100),
+      evidence: bestEvidence,
+    };
   }
 
-  return { status: 'missing', score: 0, evidence: [] };
+  return {
+    requirement: rawRequirement,
+    category: 'projects',
+    importance: 'preferred',
+    status: 'missing',
+    relationship: 'MISSING',
+    score: 0,
+    evidence: [],
+  };
 }
 
-function matchSkills(skills, profile, importance) {
-  const results = [];
-
-  for (const [category, list] of Object.entries(asObject(skills))) {
-    asArray(list).forEach((skill) => {
-      const normalizedSkill = String(skill).trim();
-      if (!normalizedSkill) return;
-
-      const evidence = findEvidenceForSkill(normalizedSkill, profile);
-      const status = evidence.length > 0 ? 'matched' : 'missing';
-      const score = status === 'matched' ? 100 : 0;
-
-      results.push({
-        requirement: normalizedSkill,
-        category: `skills.${category}`,
-        importance,
-        status,
-        score,
-        evidence,
-      });
-    });
-  }
-
-  return results;
-}
-
-function collectAllProfileText(profile) {
-  const skillText = Object.values(asObject(profile.skills))
-    .flatMap((list) => asArray(list))
-    .join(' ');
-
-  const experienceText = asArray(profile.experience)
-    .map((job) => buildExperienceText(job))
-    .join(' ');
-
-  const projectText = asArray(profile.projects)
-    .map((project) => buildProjectText(project))
-    .join(' ');
-
-  const educationText = asArray(profile.education)
-    .map((edu) =>
-      normalizeText(
-        `${edu.qualification || ''} ${edu.fieldOfStudy || ''} ${edu.institution || ''}`,
-      ),
-    )
-    .join(' ');
-
-  return normalizeText(
-    `${profile.professionalSummary || ''} ${skillText} ${experienceText} ${projectText} ${educationText}`,
-  );
-}
-
-function matchKeywords(keywords, profile) {
-  const profileText = collectAllProfileText(profile);
+function matchKeywordList(keywords, profile) {
   const keywordList = asArray(keywords).map((k) => String(k).trim()).filter(Boolean);
+  if (keywordList.length === 0) {
+    return { score: 100, matches: [] };
+  }
 
-  if (keywordList.length === 0) return { score: 100, matched: [] };
+  const allSources = collectAllProfileTextSources(profile);
+  const sourceTexts = allSources.map((source) => normalizeText(source.text));
 
-  const matched = [];
+  const matches = [];
   keywordList.forEach((keyword) => {
-    if (profileText.includes(normalizeText(keyword))) {
-      matched.push(keyword);
+    const normalizedKeyword = normalizeText(keyword);
+    const tokens = tokenize(keyword);
+
+    if (tokens.length === 0) return;
+
+    const exactPresent = sourceTexts.some((text) =>
+      text.includes(normalizedKeyword),
+    );
+    const partialCount = tokens.filter((token) =>
+      sourceTexts.some((text) => text.includes(token)),
+    ).length;
+    const partialRatio = tokens.length ? partialCount / tokens.length : 0;
+
+    let status = 'missing';
+    let relationship = 'MISSING';
+    let score = 0;
+
+    if (exactPresent) {
+      status = 'matched';
+      relationship = 'EXACT_MATCH';
+      score = 100;
+    } else if (partialRatio >= 0.6) {
+      status = 'partial';
+      relationship = 'PARTIAL_MATCH';
+      score = Math.round(partialRatio * 100);
+    }
+
+    if (status !== 'missing') {
+      matches.push({
+        requirement: keyword,
+        category: 'keywords',
+        importance: 'preferred',
+        status,
+        relationship,
+        score,
+        evidence: [],
+      });
     }
   });
 
   return {
-    score: Math.round((matched.length / keywordList.length) * 100),
-    matched,
+    score: Math.round((matches.length / keywordList.length) * 100),
+    matches,
   };
 }
 
-function calculateSkillsScore(profile, jobAnalysis) {
-  const requiredResults = matchSkills(jobAnalysis.requiredSkills, profile, 'required');
-  const preferredResults = matchSkills(jobAnalysis.preferredSkills, profile, 'preferred');
+function calculateSkills(profile, jobAnalysis) {
+  const requiredResults = matchSkillsObject(
+    jobAnalysis.requiredSkills,
+    profile,
+    'required',
+  );
+  const preferredResults = matchSkillsObject(
+    jobAnalysis.preferredSkills,
+    profile,
+    'preferred',
+  );
 
   const requiredTotal = requiredResults.length;
   const preferredTotal = preferredResults.length;
@@ -402,55 +615,34 @@ function calculateSkillsScore(profile, jobAnalysis) {
   };
 }
 
-function calculateEducationScore(profile, jobAnalysis) {
-  const requirements = asArray(jobAnalysis.educationRequirements).map((r) =>
-    String(r).trim(),
-  ).filter(Boolean);
+function calculateEducation(profile, jobAnalysis) {
+  const requirements = asArray(jobAnalysis.educationRequirements)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
 
-  if (requirements.length === 0) {
-    return { score: 100, results: [] };
-  }
+  if (requirements.length === 0) return { score: 100, results: [] };
 
-  const results = requirements.map((requirement) => {
-    const match = matchEducationRequirement(requirement, profile.education);
-    return {
-      requirement,
-      category: 'education',
-      importance: 'required',
-      status: match.status,
-      score: match.score,
-      evidence: match.evidence,
-    };
-  });
+  const results = requirements.map((requirement) =>
+    matchEducationRequirement(requirement, profile),
+  );
 
   const matchedCount = results.filter((r) => r.status === 'matched').length;
   const partialCount = results.filter((r) => r.status === 'partial').length;
-  const score =
-    ((matchedCount + partialCount * 0.5) / requirements.length) * 100;
+  const score = ((matchedCount + partialCount * 0.5) / requirements.length) * 100;
 
   return { score: Math.round(score), results };
 }
 
-function calculateExperienceScore(profile, jobAnalysis) {
-  const requirements = asArray(jobAnalysis.experienceRequirements).map((r) =>
-    String(r).trim(),
-  ).filter(Boolean);
+function calculateExperience(profile, jobAnalysis) {
+  const requirements = asArray(jobAnalysis.experienceRequirements)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
 
-  if (requirements.length === 0) {
-    return { score: 100, results: [] };
-  }
+  if (requirements.length === 0) return { score: 100, results: [] };
 
-  const results = requirements.map((requirement) => {
-    const match = matchExperienceRequirement(requirement, profile.experience);
-    return {
-      requirement,
-      category: 'experience',
-      importance: 'required',
-      status: match.status,
-      score: match.score,
-      evidence: match.evidence,
-    };
-  });
+  const results = requirements.map((requirement) =>
+    matchExperienceRequirement(requirement, profile),
+  );
 
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
   return {
@@ -459,8 +651,8 @@ function calculateExperienceScore(profile, jobAnalysis) {
   };
 }
 
-function calculateProjectScore(profile, jobAnalysis) {
-  const jobRequirements = [
+function calculateProjects(profile, jobAnalysis) {
+  const projectRequirements = [
     ...asArray(jobAnalysis.requiredSkills?.technical),
     ...asArray(jobAnalysis.preferredSkills?.technical),
     ...asArray(jobAnalysis.experienceRequirements),
@@ -469,33 +661,22 @@ function calculateProjectScore(profile, jobAnalysis) {
     .map((item) => String(item).trim())
     .filter(Boolean);
 
-  if (jobRequirements.length === 0) {
-    return { score: 100, results: [] };
-  }
+  const uniqueRequirements = [...new Set(projectRequirements)];
+  if (uniqueRequirements.length === 0) return { score: 100, results: [] };
 
-  const uniqueRequirements = [...new Set(jobRequirements)];
-  const results = uniqueRequirements.map((requirement) => {
-    const match = matchProjectRequirement(requirement, profile.projects);
-    return {
-      requirement,
-      category: 'projects',
-      importance: 'preferred',
-      status: match.status,
-      score: match.score,
-      evidence: match.evidence,
-    };
-  });
-
-  const matchedScore = results.filter((r) => r.status === 'matched').reduce(
-    (sum, r) => sum + r.score,
-    0,
+  const results = uniqueRequirements.map((requirement) =>
+    matchProjectRequirement(requirement, profile),
   );
-  const totalPossible = uniqueRequirements.length * 100;
 
+  const totalScore = results.reduce((sum, r) => sum + r.score, 0);
   return {
-    score: Math.round((matchedScore / totalPossible) * 100),
+    score: Math.round(totalScore / (uniqueRequirements.length * 100) * 100),
     results,
   };
+}
+
+function calculateKeywords(profile, jobAnalysis) {
+  return matchKeywordList(jobAnalysis.keywords, profile);
 }
 
 function validateProfile(profile) {
@@ -518,11 +699,11 @@ export function computeMatch(profile, jobAnalysis) {
   validateProfile(profile);
   validateJobAnalysis(jobAnalysis);
 
-  const skills = calculateSkillsScore(profile, jobAnalysis);
-  const education = calculateEducationScore(profile, jobAnalysis);
-  const experience = calculateExperienceScore(profile, jobAnalysis);
-  const projects = calculateProjectScore(profile, jobAnalysis);
-  const keywords = matchKeywords(jobAnalysis.keywords, profile);
+  const skills = calculateSkills(profile, jobAnalysis);
+  const education = calculateEducation(profile, jobAnalysis);
+  const experience = calculateExperience(profile, jobAnalysis);
+  const projects = calculateProjects(profile, jobAnalysis);
+  const keywords = calculateKeywords(profile, jobAnalysis);
 
   const overallScore = Math.round(
     skills.score * WEIGHTS.skills +
@@ -537,6 +718,7 @@ export function computeMatch(profile, jobAnalysis) {
     ...education.results,
     ...experience.results,
     ...projects.results,
+    ...keywords.matches,
   ];
 
   const strongMatches = requirements
@@ -548,10 +730,7 @@ export function computeMatch(profile, jobAnalysis) {
     (item) => item.status === 'missing' && item.importance === 'required',
   );
 
-  const partialMatches = requirements.filter(
-    (item) => item.status === 'partial',
-  );
-
+  const partialMatches = requirements.filter((item) => item.status === 'partial');
   const unverifiedRequirements = requirements.filter(
     (item) => item.status === 'unverified',
   );
@@ -573,3 +752,14 @@ export function computeMatch(profile, jobAnalysis) {
     unverifiedRequirements,
   };
 }
+
+export const MATCH_RELATIONSHIPS = Object.freeze({
+  EXACT_MATCH: 'EXACT_MATCH',
+  ALIAS_MATCH: 'ALIAS_MATCH',
+  STRONG_CONTEXT_MATCH: 'STRONG_CONTEXT_MATCH',
+  PARTIAL_MATCH: 'PARTIAL_MATCH',
+  TRANSFERABLE: 'TRANSFERABLE',
+  RELATED_BUT_DIFFERENT: 'RELATED_BUT_DIFFERENT',
+  MISSING: 'MISSING',
+  UNVERIFIED: 'UNVERIFIED',
+});
