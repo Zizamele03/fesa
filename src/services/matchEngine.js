@@ -1,4 +1,13 @@
 import { canonicalizeSkill, STOP_WORDS } from './aliasMap.js';
+import { classifyRelationship } from './relatedTechnologies.js';
+import {
+  getCanonicalSkillSet,
+  getProfileTextSources,
+  findEvidenceForSkill,
+  findEvidenceForAnySkill,
+  normalizeText,
+  containsPhrase,
+} from './truthLock.js';
 
 const WEIGHTS = {
   skills: 0.35,
@@ -7,14 +16,6 @@ const WEIGHTS = {
   projects: 0.15,
   keywords: 0.1,
 };
-
-function normalizeText(value = '') {
-  return String(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9+#. ]/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function tokenize(value = '') {
   return normalizeText(value)
@@ -30,143 +31,19 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-function collectSkillEntries(profile) {
-  const entries = [];
-  const skillGroups = asObject(profile.skills);
-
-  Object.entries(skillGroups).forEach(([category, list]) => {
-    asArray(list).forEach((skill, index) => {
-      if (String(skill).trim()) {
-        entries.push({
-          raw: String(skill).trim(),
-          canonical: canonicalizeSkill(skill),
-          sourceType: 'skill',
-          sourceId: `skill-${category}-${index}`,
-          sourceTitle: `${category[0].toUpperCase()}${category.slice(1)} Skill`,
-          text: String(skill).trim(),
-        });
-      }
-    });
-  });
-
-  asArray(profile.projects).forEach((project, projectIndex) => {
-    asArray(project.technologies).forEach((tech, techIndex) => {
-      if (String(tech).trim()) {
-        entries.push({
-          raw: String(tech).trim(),
-          canonical: canonicalizeSkill(tech),
-          sourceType: 'project',
-          sourceId: `project-${project.id || projectIndex}-tech-${techIndex}`,
-          sourceTitle: project.name || 'Project',
-          text: String(tech).trim(),
-        });
-      }
-    });
-  });
-
-  asArray(profile.experience).forEach((job, jobIndex) => {
-    asArray(job.technologies).forEach((tech, techIndex) => {
-      if (String(tech).trim()) {
-        entries.push({
-          raw: String(tech).trim(),
-          canonical: canonicalizeSkill(tech),
-          sourceType: 'experience',
-          sourceId: `experience-${job.id || jobIndex}-tech-${techIndex}`,
-          sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
-          text: String(tech).trim(),
-        });
-      }
-    });
-  });
-
-  return entries;
-}
-
-function collectAllProfileTextSources(profile) {
-  const sources = [];
-
-  if (profile.professionalSummary) {
-    sources.push({
-      sourceType: 'career_profile',
-      sourceId: 'summary',
-      sourceTitle: 'Professional Summary',
-      text: String(profile.professionalSummary),
-    });
-  }
-
-  asArray(profile.experience).forEach((job, index) => {
-    const text = [
-      job.description,
-      ...asArray(job.responsibilities),
-      ...asArray(job.achievements),
-      ...asArray(job.technologies),
-    ]
-      .filter(Boolean)
-      .join(' ');
-    if (text) {
-      sources.push({
-        sourceType: 'experience',
-        sourceId: job.id || `experience-${index}`,
-        sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
-        text,
-      });
-    }
-  });
-
-  asArray(profile.projects).forEach((project, index) => {
-    const text = [
-      project.description,
-      ...asArray(project.technologies),
-      ...asArray(project.achievements),
-    ]
-      .filter(Boolean)
-      .join(' ');
-    if (text) {
-      sources.push({
-        sourceType: 'project',
-        sourceId: project.id || `project-${index}`,
-        sourceTitle: project.name || 'Project',
-        text,
-      });
-    }
-  });
-
-  return sources;
-}
-
-function findSkillEvidence(requirement, profile) {
-  const targetCanonical = canonicalizeSkill(requirement);
-  const allEntries = collectSkillEntries(profile);
-  const evidence = [];
-
-  for (const entry of allEntries) {
-    if (entry.canonical === targetCanonical) {
-      evidence.push({
-        sourceType: entry.sourceType,
-        sourceId: entry.sourceId,
-        sourceTitle: entry.sourceTitle,
-        text: entry.text,
-        raw: entry.raw,
-        canonical: entry.canonical,
-      });
-    }
-  }
-
-  return evidence.slice(0, 3);
-}
-
-function matchSkillRequirement(requirement, profile, importance) {
+function matchSkillRequirement(requirement, profile, importance, profileSkills) {
   const rawRequirement = String(requirement).trim();
   if (!rawRequirement) return null;
 
-  const targetCanonical = canonicalizeSkill(rawRequirement);
-  const directEvidence = findSkillEvidence(rawRequirement, profile);
-  const isAlias = directEvidence.some(
-    (evidence) => canonicalizeSkill(evidence.raw) === targetCanonical &&
-      normalizeText(evidence.raw) !== targetCanonical,
-  );
-
+  // Step 1: direct evidence (exact or alias)
+  const directEvidence = findEvidenceForSkill(profile, rawRequirement, profileSkills);
   if (directEvidence.length > 0) {
+    const rawCanonical = canonicalizeSkill(rawRequirement);
+    const isAlias = directEvidence.some(
+      (ev) =>
+        canonicalizeSkill(ev.text) === rawCanonical &&
+        normalizeText(ev.text) !== rawCanonical,
+    );
     return {
       requirement: rawRequirement,
       category: 'skills',
@@ -178,21 +55,18 @@ function matchSkillRequirement(requirement, profile, importance) {
     };
   }
 
-  const textSources = collectAllProfileTextSources(profile);
-  const requirementTokens = tokenize(rawRequirement).filter(
-    (token) => token !== targetCanonical && !STOP_WORDS.has(token),
-  );
-
-  let contextEvidence = [];
+  // Step 2: contextual match (all significant tokens of the requirement appear
+  // in a profile text source).
+  const textSources = getProfileTextSources(profile);
+  const requirementTokens = tokenize(rawRequirement);
 
   if (requirementTokens.length > 0) {
+    const contextEvidence = [];
     for (const source of textSources) {
-      const normalizedText = normalizeText(source.text);
-      const allTokensPresent = requirementTokens.every((token) =>
-        normalizedText.includes(token),
+      const allPresent = requirementTokens.every((token) =>
+        containsPhrase(source.text, token),
       );
-
-      if (allTokensPresent) {
+      if (allPresent) {
         contextEvidence.push({
           sourceType: source.sourceType,
           sourceId: source.sourceId,
@@ -201,29 +75,49 @@ function matchSkillRequirement(requirement, profile, importance) {
         });
       }
     }
-  } else if (targetCanonical) {
-    for (const source of textSources) {
-      const normalizedText = normalizeText(source.text);
-      if (normalizedText.includes(targetCanonical)) {
-        contextEvidence.push({
-          sourceType: source.sourceType,
-          sourceId: source.sourceId,
-          sourceTitle: source.sourceTitle,
-          text: source.text,
-        });
-      }
+
+    if (contextEvidence.length > 0) {
+      return {
+        requirement: rawRequirement,
+        category: 'skills',
+        importance,
+        status: 'matched',
+        relationship: 'STRONG_CONTEXT_MATCH',
+        score: 80,
+        evidence: contextEvidence.slice(0, 3),
+      };
     }
   }
 
-  if (contextEvidence.length > 0) {
+  // Step 3: related or transferable
+  const relatedSkillNames = [];
+  let bestRelationship = null;
+
+  for (const profileSkill of profileSkills) {
+    const rel = classifyRelationship(profileSkill, rawRequirement);
+    if (rel === 'TRANSFERABLE') {
+      relatedSkillNames.push(profileSkill);
+      bestRelationship = 'TRANSFERABLE';
+    } else if (rel === 'RELATED_BUT_DIFFERENT' && bestRelationship !== 'TRANSFERABLE') {
+      relatedSkillNames.push(profileSkill);
+      bestRelationship = 'RELATED_BUT_DIFFERENT';
+    }
+  }
+
+  if (bestRelationship) {
+    const relatedEvidence = findEvidenceForAnySkill(
+      profile,
+      relatedSkillNames,
+      profileSkills,
+    );
     return {
       requirement: rawRequirement,
       category: 'skills',
       importance,
-      status: 'matched',
-      relationship: 'STRONG_CONTEXT_MATCH',
-      score: 80,
-      evidence: contextEvidence.slice(0, 3),
+      status: 'partial',
+      relationship: bestRelationship,
+      score: bestRelationship === 'TRANSFERABLE' ? 55 : 30,
+      evidence: relatedEvidence,
     };
   }
 
@@ -238,17 +132,14 @@ function matchSkillRequirement(requirement, profile, importance) {
   };
 }
 
-function matchSkillsObject(skills, profile, importance) {
+function matchSkillsObject(skills, profile, importance, profileSkills) {
   const results = [];
 
   for (const [category, list] of Object.entries(asObject(skills))) {
     asArray(list).forEach((skill) => {
-      const result = matchSkillRequirement(skill, profile, importance);
+      const result = matchSkillRequirement(skill, profile, importance, profileSkills);
       if (result) {
-        results.push({
-          ...result,
-          category: `skills.${category}`,
-        });
+        results.push({ ...result, category: `skills.${category}` });
       }
     });
   }
@@ -258,7 +149,6 @@ function matchSkillsObject(skills, profile, importance) {
 
 function getEducationLevel(text) {
   const normalized = normalizeText(text);
-
   if (normalized.includes('phd') || normalized.includes('doctor')) return 'doctorate';
   if (normalized.includes('master')) return 'master';
   if (
@@ -271,7 +161,6 @@ function getEducationLevel(text) {
   }
   if (normalized.includes('associate')) return 'associate';
   if (normalized.includes('high school')) return 'highschool';
-
   return '';
 }
 
@@ -287,8 +176,19 @@ function getEducationField(text) {
     'engineering',
     'business',
     'data science',
+    'nursing',
+    'accounting',
+    'finance',
+    'marketing',
+    'law',
+    'medicine',
+    'education',
+    'psychology',
+    'biology',
+    'chemistry',
+    'physics',
+    'mathematics',
   ];
-
   return fields.find((field) => normalized.includes(field)) || '';
 }
 
@@ -360,14 +260,14 @@ function matchEducationRequirement(requirement, profile) {
 }
 
 function buildExperienceText(experienceItem) {
-  return normalizeText(
-    [
-      experienceItem.description,
-      ...asArray(experienceItem.responsibilities),
-      ...asArray(experienceItem.achievements),
-      ...asArray(experienceItem.technologies),
-    ].join(' '),
-  );
+  return [
+    experienceItem.description,
+    ...asArray(experienceItem.responsibilities),
+    ...asArray(experienceItem.achievements),
+    ...asArray(experienceItem.technologies),
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function matchExperienceRequirement(requirement, profile) {
@@ -394,7 +294,7 @@ function matchExperienceRequirement(requirement, profile) {
   asArray(profile.experience).forEach((job, index) => {
     const text = buildExperienceText(job);
     const matchedTokens = requirementTokens.filter((token) =>
-      text.includes(token),
+      containsPhrase(text, token),
     );
     const ratio = matchedTokens.length / requirementTokens.length;
 
@@ -447,13 +347,13 @@ function matchExperienceRequirement(requirement, profile) {
 }
 
 function buildProjectText(project) {
-  return normalizeText(
-    [
-      project.description,
-      ...asArray(project.technologies),
-      ...asArray(project.achievements),
-    ].join(' '),
-  );
+  return [
+    project.description,
+    ...asArray(project.technologies),
+    ...asArray(project.achievements),
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function matchProjectRequirement(requirement, profile) {
@@ -480,7 +380,7 @@ function matchProjectRequirement(requirement, profile) {
   asArray(profile.projects).forEach((project, index) => {
     const text = buildProjectText(project);
     const matchedTokens = requirementTokens.filter((token) =>
-      text.includes(token),
+      containsPhrase(text, token),
     );
     const ratio = matchedTokens.length / requirementTokens.length;
 
@@ -522,27 +422,21 @@ function matchProjectRequirement(requirement, profile) {
 
 function matchKeywordList(keywords, profile) {
   const keywordList = asArray(keywords).map((k) => String(k).trim()).filter(Boolean);
-  if (keywordList.length === 0) {
-    return { score: 100, matches: [] };
-  }
+  if (keywordList.length === 0) return { score: 100, matches: [] };
 
-  const allSources = collectAllProfileTextSources(profile);
-  const sourceTexts = allSources.map((source) => normalizeText(source.text));
+  const sourceTexts = getProfileTextSources(profile).map((source) => source.text);
 
   const matches = [];
-  keywordList.forEach((keyword) => {
-    const normalizedKeyword = normalizeText(keyword);
-    const tokens = tokenize(keyword);
 
+  keywordList.forEach((keyword) => {
+    const tokens = tokenize(keyword);
     if (tokens.length === 0) return;
 
-    const exactPresent = sourceTexts.some((text) =>
-      text.includes(normalizedKeyword),
+    const exactPresent = sourceTexts.some((text) => containsPhrase(text, keyword));
+    const presentTokens = tokens.filter((token) =>
+      sourceTexts.some((text) => containsPhrase(text, token)),
     );
-    const partialCount = tokens.filter((token) =>
-      sourceTexts.some((text) => text.includes(token)),
-    ).length;
-    const partialRatio = tokens.length ? partialCount / tokens.length : 0;
+    const partialRatio = presentTokens.length / tokens.length;
 
     let status = 'missing';
     let relationship = 'MISSING';
@@ -577,16 +471,18 @@ function matchKeywordList(keywords, profile) {
   };
 }
 
-function calculateSkills(profile, jobAnalysis) {
+function calculateSkills(profile, jobAnalysis, profileSkills) {
   const requiredResults = matchSkillsObject(
     jobAnalysis.requiredSkills,
     profile,
     'required',
+    profileSkills,
   );
   const preferredResults = matchSkillsObject(
     jobAnalysis.preferredSkills,
     profile,
     'preferred',
+    profileSkills,
   );
 
   const requiredTotal = requiredResults.length;
@@ -645,10 +541,7 @@ function calculateExperience(profile, jobAnalysis) {
   );
 
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-  return {
-    score: Math.round(totalScore / requirements.length),
-    results,
-  };
+  return { score: Math.round(totalScore / requirements.length), results };
 }
 
 function calculateProjects(profile, jobAnalysis) {
@@ -670,13 +563,9 @@ function calculateProjects(profile, jobAnalysis) {
 
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
   return {
-    score: Math.round(totalScore / (uniqueRequirements.length * 100) * 100),
+    score: Math.round((totalScore / (uniqueRequirements.length * 100)) * 100),
     results,
   };
-}
-
-function calculateKeywords(profile, jobAnalysis) {
-  return matchKeywordList(jobAnalysis.keywords, profile);
 }
 
 function validateProfile(profile) {
@@ -689,7 +578,6 @@ function validateJobAnalysis(jobAnalysis) {
   if (!jobAnalysis || typeof jobAnalysis !== 'object') {
     throw new Error('Job Analysis is invalid or missing.');
   }
-
   if (!jobAnalysis.requiredSkills || !jobAnalysis.preferredSkills) {
     throw new Error('Job Analysis is missing required skills data.');
   }
@@ -699,11 +587,13 @@ export function computeMatch(profile, jobAnalysis) {
   validateProfile(profile);
   validateJobAnalysis(jobAnalysis);
 
-  const skills = calculateSkills(profile, jobAnalysis);
+  const profileSkills = getCanonicalSkillSet(profile);
+
+  const skills = calculateSkills(profile, jobAnalysis, profileSkills);
   const education = calculateEducation(profile, jobAnalysis);
   const experience = calculateExperience(profile, jobAnalysis);
   const projects = calculateProjects(profile, jobAnalysis);
-  const keywords = calculateKeywords(profile, jobAnalysis);
+  const keywords = matchKeywordList(jobAnalysis.keywords, profile);
 
   const overallScore = Math.round(
     skills.score * WEIGHTS.skills +
@@ -730,7 +620,19 @@ export function computeMatch(profile, jobAnalysis) {
     (item) => item.status === 'missing' && item.importance === 'required',
   );
 
-  const partialMatches = requirements.filter((item) => item.status === 'partial');
+  const partialMatches = requirements.filter(
+    (item) =>
+      item.status === 'partial' &&
+      item.relationship !== 'RELATED_BUT_DIFFERENT' &&
+      item.relationship !== 'TRANSFERABLE',
+  );
+
+  const relatedOrTransferable = requirements.filter(
+    (item) =>
+      item.relationship === 'RELATED_BUT_DIFFERENT' ||
+      item.relationship === 'TRANSFERABLE',
+  );
+
   const unverifiedRequirements = requirements.filter(
     (item) => item.status === 'unverified',
   );
@@ -749,6 +651,7 @@ export function computeMatch(profile, jobAnalysis) {
     requirements,
     missingRequirements,
     partialMatches,
+    relatedOrTransferable,
     unverifiedRequirements,
   };
 }

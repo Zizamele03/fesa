@@ -17,8 +17,11 @@ function relationshipTone(relationship) {
     MISSING: 'danger',
     UNVERIFIED: 'neutral',
   };
-
   return map[relationship] || 'neutral';
+}
+
+function labelize(value) {
+  return String(value || '').replace(/_/g, ' ').toLowerCase();
 }
 
 function RequirementItem({ item }) {
@@ -30,7 +33,7 @@ function RequirementItem({ item }) {
           <div className="requirement-meta">
             {item.relationship && (
               <Badge tone={relationshipTone(item.relationship)}>
-                {item.relationship.replace(/_/g, ' ').toLowerCase()}
+                {labelize(item.relationship)}
               </Badge>
             )}
             {item.importance && (
@@ -55,6 +58,22 @@ function RequirementItem({ item }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function RequirementList({ items }) {
+  if (!items || items.length === 0) {
+    return <p className="section-empty">Nothing to show.</p>;
+  }
+
+  return (
+    <div className="match-list">
+      {items.map((item, index) => (
+        <Card key={`${item.requirement}-${index}`}>
+          <RequirementItem item={item} />
+        </Card>
+      ))}
     </div>
   );
 }
@@ -117,73 +136,34 @@ export default function MatchAnalysis() {
 
       <div className="page-section">
         <h2>Strong Matches</h2>
-        {matchAnalysis.strongMatches.length === 0 ? (
-          <p className="section-empty">No strong matches identified.</p>
-        ) : (
-          <div className="match-list">
-            {matchAnalysis.strongMatches.map((item, index) => (
-              <Card key={`strong-${item.requirement}-${index}`}>
-                <RequirementItem item={item} />
-              </Card>
-            ))}
-          </div>
-        )}
+        <RequirementList items={matchAnalysis.strongMatches} />
       </div>
 
       <div className="page-section">
-        <h2>Requirements</h2>
-        {matchAnalysis.requirements.length === 0 ? (
-          <p className="section-empty">No requirements found.</p>
-        ) : (
-          <div className="match-list">
-            {matchAnalysis.requirements.map((item, index) => (
-              <Card key={`req-${item.requirement}-${index}`}>
-                <RequirementItem item={item} />
-              </Card>
-            ))}
-          </div>
-        )}
+        <h2>Related &amp; Transferable</h2>
+        <RequirementList items={matchAnalysis.relatedOrTransferable || []} />
+      </div>
+
+      <div className="page-section">
+        <h2>All Requirements</h2>
+        <RequirementList items={matchAnalysis.requirements} />
       </div>
 
       <div className="analysis-grid">
         <Card>
           <h2>Missing Requirements</h2>
-          {matchAnalysis.missingRequirements.length === 0 ? (
-            <p className="section-empty">No missing requirements.</p>
-          ) : (
-            <div className="match-list">
-              {matchAnalysis.missingRequirements.map((item, index) => (
-                <RequirementItem key={`missing-${item.requirement}-${index}`} item={item} />
-              ))}
-            </div>
-          )}
+          <RequirementList items={matchAnalysis.missingRequirements} />
         </Card>
 
         <Card>
           <h2>Partial Matches</h2>
-          {matchAnalysis.partialMatches.length === 0 ? (
-            <p className="section-empty">No partial matches.</p>
-          ) : (
-            <div className="match-list">
-              {matchAnalysis.partialMatches.map((item, index) => (
-                <RequirementItem key={`partial-${item.requirement}-${index}`} item={item} />
-              ))}
-            </div>
-          )}
+          <RequirementList items={matchAnalysis.partialMatches} />
         </Card>
       </div>
 
       <div className="page-section">
         <h2>Unverified Requirements</h2>
-        {matchAnalysis.unverifiedRequirements.length === 0 ? (
-          <p className="section-empty">No unverified requirements.</p>
-        ) : (
-          <div className="match-list">
-            {matchAnalysis.unverifiedRequirements.map((item, index) => (
-              <RequirementItem key={`unverified-${item.requirement}-${index}`} item={item} />
-            ))}
-          </div>
-        )}
+        <RequirementList items={matchAnalysis.unverifiedRequirements} />
       </div>
 
       <div className="page-section">
