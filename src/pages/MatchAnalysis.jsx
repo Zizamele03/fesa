@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import Badge from '../components/Badge.jsx';
@@ -37,9 +37,7 @@ function RequirementItem({ item }) {
               </Badge>
             )}
             {item.importance && (
-              <span>
-                {item.importance === 'required' ? 'Required' : 'Preferred'}
-              </span>
+              <span>{item.importance === 'required' ? 'Required' : 'Preferred'}</span>
             )}
             {item.category && <span>{item.category}</span>}
           </div>
@@ -66,7 +64,6 @@ function RequirementList({ items }) {
   if (!items || items.length === 0) {
     return <p className="section-empty">Nothing to show.</p>;
   }
-
   return (
     <div className="match-list">
       {items.map((item, index) => (
@@ -80,8 +77,10 @@ function RequirementList({ items }) {
 
 export default function MatchAnalysis() {
   const location = useLocation();
+  const navigate = useNavigate();
   const matchAnalysis = location.state?.matchAnalysis;
   const jobAnalysis = location.state?.jobAnalysis;
+  const applicationId = location.state?.applicationId;
 
   if (!matchAnalysis || !jobAnalysis) {
     return (
@@ -100,11 +99,23 @@ export default function MatchAnalysis() {
     );
   }
 
+  const handleGeneratePackage = () => {
+    const url = applicationId
+      ? `/application-package?applicationId=${applicationId}`
+      : '/application-package';
+    navigate(url);
+  };
+
   return (
     <div>
       <PageHeader
         title="Match Analysis"
         description={`${jobAnalysis.job.title || 'Job'} at ${jobAnalysis.job.company || 'Company'}`}
+        actions={
+          <Button onClick={handleGeneratePackage} size="lg">
+            Generate Application Package
+          </Button>
+        }
       />
 
       <div className="analysis-overview">

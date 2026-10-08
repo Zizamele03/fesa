@@ -717,3 +717,7 @@ It is finished when you can take a real job advertisement, paste it into the pla
 > A truthful, relevant, professional resume and cover letter that you would genuinely submit to the employer.
 
 That is the north star.
+
+
+
+

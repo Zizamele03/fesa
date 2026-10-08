@@ -107,7 +107,7 @@ function JobAnalysis() {
       }
 
       navigate('/match-analysis', {
-        state: { matchAnalysis, jobAnalysis: analysis },
+        state: { matchAnalysis, jobAnalysis: analysis, applicationId },
       });
     } catch (error) {
       console.error('Match analysis error:', error);
