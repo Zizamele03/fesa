@@ -16,11 +16,6 @@ export function normalizeText(value = '') {
     .trim();
 }
 
-/**
- * Very conservative singularizer. Only strips obvious plural suffixes so
- * "apis" matches "api" and "responsibilities" matches "responsibility".
- * Does not modify words shorter than 4 characters or words ending in "ss".
- */
 function stemToken(token) {
   if (token.length < 4) return token;
   if (token.endsWith('ss')) return token;
@@ -108,6 +103,9 @@ export function getProfileTextSources(profile) {
 
   asArray(profile.experience).forEach((job, index) => {
     const text = [
+      job.company,
+      job.position,
+      job.location,
       job.description,
       ...asArray(job.responsibilities),
       ...asArray(job.achievements),
@@ -127,6 +125,7 @@ export function getProfileTextSources(profile) {
 
   asArray(profile.projects).forEach((project, index) => {
     const text = [
+      project.name,
       project.description,
       ...asArray(project.technologies),
       ...asArray(project.achievements),
@@ -183,6 +182,24 @@ export function getProfileTextSources(profile) {
       });
     }
   });
+
+  // Include all listed skills, so a skill declared in the profile but not
+  // repeated in any experience/project is still treated as evidence.
+  const allSkills = [];
+  for (const list of Object.values(asObject(profile.skills))) {
+    for (const skill of asArray(list)) {
+      const str = String(skill || '').trim();
+      if (str) allSkills.push(str);
+    }
+  }
+  if (allSkills.length > 0) {
+    sources.push({
+      sourceType: 'skill',
+      sourceId: 'skills',
+      sourceTitle: 'Skills',
+      text: allSkills.join(' '),
+    });
+  }
 
   return sources;
 }

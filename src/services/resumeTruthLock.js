@@ -1,99 +1,9 @@
 import { canonicalizeSkill } from './aliasMap.js';
+import { getCanonicalSkillSet, containsPhrase, normalizeText } from './truthLock.js';
 import {
-  getCanonicalSkillSet,
-  getProfileTextSources,
-  containsPhrase,
-  normalizeText,
-} from './truthLock.js';
-
-const GENERAL_STOPWORDS = new Set([
-  'the','and','for','with','using','from','into','that','this','which',
-  'our','their','they','was','were','has','have','had','did','done',
-  'doing','will','would','should','could','can','may','might','must',
-  'about','across','within','during','after','before','between','under',
-  'over','through','also','plus','or','but','not','all','any','some',
-  'more','most','such','only','just','very','well','into','onto',
-  'upon','than','then','when','where','why','how','what','who','whom',
-  'these','those','them','its','it','is','are','am','be','been','being',
-  'do','does','to','of','in','on','at','by','so','if','as','an','a',
-  'i','me','my','we','us','you','your','new','current','various',
-  'several','multiple','other','another','same','each','every',
-]);
-
-function collectKnownEntities(profile) {
-  const entities = new Set();
-
-  const add = (value) => {
-    const str = String(value || '').trim();
-    if (str.length >= 3 && !GENERAL_STOPWORDS.has(str.toLowerCase())) {
-      entities.add(str.toLowerCase());
-    }
-  };
-
-  const skills = getCanonicalSkillSet(profile);
-  for (const skill of skills) add(skill);
-
-  for (const list of Object.values(profile.skills || {})) {
-    for (const skill of Array.isArray(list) ? list : []) add(skill);
-  }
-
-  for (const job of profile.experience || []) {
-    add(job.company);
-    add(job.position);
-    for (const tech of job.technologies || []) add(tech);
-  }
-
-  for (const project of profile.projects || []) {
-    add(project.name);
-    for (const tech of project.technologies || []) add(tech);
-  }
-
-  for (const edu of profile.education || []) {
-    add(edu.institution);
-  }
-
-  for (const cert of profile.certifications || []) {
-    add(cert.name);
-    add(cert.issuer);
-  }
-
-  return entities;
-}
-
-function extractKeyTerms(text, knownEntities) {
-  const terms = new Set();
-  const raw = String(text || '');
-
-  const numbers = raw.match(/\d+[%+kKmM]?/g) || [];
-  for (const n of numbers) terms.add(n.toLowerCase());
-
-  for (const entity of knownEntities) {
-    if (containsPhrase(raw, entity)) terms.add(entity);
-  }
-
-  const words = raw.split(/\s+/);
-  for (let i = 0; i < words.length; i += 1) {
-    const clean = words[i].replace(/[^A-Za-z0-9+#-]/g, '');
-    if (!clean || clean.length < 2) continue;
-    if (i === 0) continue;
-    if (/^[A-Z]/.test(clean) && !GENERAL_STOPWORDS.has(clean.toLowerCase())) {
-      terms.add(clean.toLowerCase());
-    }
-  }
-
-  return terms;
-}
-
-function validateTextAgainstSource(text, sourceText, knownEntities) {
-  const terms = extractKeyTerms(text, knownEntities);
-  const missing = [];
-
-  for (const term of terms) {
-    if (!containsPhrase(sourceText, term)) missing.push(term);
-  }
-
-  return { supported: missing.length === 0, missing };
-}
+  collectKnownEntities,
+  validateTextAgainstSource,
+} from './claimExtraction.js';
 
 function buildExperienceSourceText(job) {
   return [
@@ -190,7 +100,7 @@ export function validateResumeAgainstProfile(profile, resume) {
   const violations = [];
   const validated = {
     schemaVersion: 1,
-    contact: { ...resume.contact },
+    contact: {},
     summary: '',
     skillGroups: [],
     experience: [],
@@ -200,7 +110,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     achievements: [],
   };
 
-  // Contact — trust profile values
   validated.contact = {
     fullName: profile.personal?.fullName || '',
     email: profile.personal?.email || '',
@@ -213,10 +122,23 @@ export function validateResumeAgainstProfile(profile, resume) {
     ].filter(Boolean),
   };
 
-  // Summary — token-level check against full profile text
   if (resume.summary && typeof resume.summary === 'string') {
-    const allSources = getProfileTextSources(profile);
-    const combined = allSources.map((s) => s.text).join(' ');
+    const sources = (profile.experience || []).map((j) => buildExperienceSourceText(j));
+    const projectSources = (profile.projects || []).map((p) => buildProjectSourceText(p));
+    const combined = [
+      profile.professionalSummary,
+      ...sources,
+      ...projectSources,
+      ...(profile.education || []).map(
+        (e) => `${e.qualification || ''} ${e.fieldOfStudy || ''} ${e.institution || ''}`,
+      ),
+      ...Object.values(profile.skills || {}).flatMap((list) =>
+        Array.isArray(list) ? list : [],
+      ),
+    ]
+      .filter(Boolean)
+      .join(' ');
+
     const { supported, missing } = validateTextAgainstSource(
       resume.summary,
       combined,
@@ -233,7 +155,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     }
   }
 
-  // Skills — must exist in profile
   for (const group of resume.skillGroups || []) {
     const validItems = [];
     for (const item of group.items || []) {
@@ -253,7 +174,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     }
   }
 
-  // Experience — must exist in profile; bullets validated against source
   for (const job of resume.experience || []) {
     const source = findProfileExperience(profile, job.company, job.position);
     if (!source) {
@@ -284,8 +204,10 @@ export function validateResumeAgainstProfile(profile, resume) {
       }
     }
 
-    if (validBullets.length === 0 && (source.description || source.responsibilities?.length)) {
-      // Fallback: use original responsibilities unchanged
+    if (
+      validBullets.length === 0 &&
+      (source.description || source.responsibilities?.length)
+    ) {
       const fallback = [
         source.description,
         ...(source.responsibilities || []),
@@ -302,7 +224,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
-  // Projects — must exist in profile
   for (const project of resume.projects || []) {
     const source = findProfileProject(profile, project.name);
     if (!source) {
@@ -317,7 +238,11 @@ export function validateResumeAgainstProfile(profile, resume) {
     const sourceText = buildProjectSourceText(source);
     let description = project.description || source.description || '';
     if (description) {
-      const { supported } = validateTextAgainstSource(description, sourceText, knownEntities);
+      const { supported } = validateTextAgainstSource(
+        description,
+        sourceText,
+        knownEntities,
+      );
       if (!supported) description = source.description || '';
     }
 
@@ -329,7 +254,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
-  // Education — must exist in profile
   for (const edu of resume.education || []) {
     const source = findProfileEducation(profile, edu.institution, edu.qualification);
     if (!source) {
@@ -350,7 +274,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
-  // Certifications — must exist in profile
   for (const cert of resume.certifications || []) {
     const source = findProfileCertification(profile, cert.name);
     if (!source) {
@@ -368,7 +291,6 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
-  // Achievements — must exist in profile
   for (const achievement of resume.achievements || []) {
     const source = findProfileAchievement(profile, achievement.title);
     if (!source) {
