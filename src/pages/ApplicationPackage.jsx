@@ -19,6 +19,10 @@ import { generateResume } from '../services/resumeApi.js';
 import { validateResumeAgainstProfile } from '../services/resumeTruthLock.js';
 import { generateCoverLetter } from '../services/coverLetterApi.js';
 import { validateCoverLetterAgainstProfile } from '../services/coverLetterTruthLock.js';
+import {
+  downloadResumePdf,
+  downloadCoverLetterPdf,
+} from '../services/pdfExport.js';
 
 const TONE_OPTIONS = [
   { value: 'professional', label: 'Professional' },
@@ -42,6 +46,7 @@ export default function ApplicationPackage() {
   const [isGeneratingResume, setIsGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState('');
   const [resumeViolations, setResumeViolations] = useState([]);
+  const [isExportingResume, setIsExportingResume] = useState(false);
 
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [letterError, setLetterError] = useState('');
@@ -50,6 +55,9 @@ export default function ApplicationPackage() {
   const [letterLength, setLetterLength] = useState('standard');
   const [isEditingLetter, setIsEditingLetter] = useState(false);
   const [letterDraft, setLetterDraft] = useState(null);
+  const [isExportingLetter, setIsExportingLetter] = useState(false);
+
+  const [exportError, setExportError] = useState('');
 
   const applicationId =
     searchParams.get('applicationId') || location.state?.applicationId;
@@ -130,6 +138,28 @@ export default function ApplicationPackage() {
     }
   }
 
+  async function handleDownloadResume() {
+    if (!application?.generatedResume) return;
+
+    setIsExportingResume(true);
+    setExportError('');
+
+    try {
+      await downloadResumePdf({
+        resume: application.generatedResume,
+        company: application.company,
+        jobTitle: application.jobTitle,
+      });
+    } catch (err) {
+      console.error('Resume export error:', err);
+      setExportError(
+        err.message || 'Could not generate resume PDF. Please try again.',
+      );
+    } finally {
+      setIsExportingResume(false);
+    }
+  }
+
   async function handleGenerateLetter() {
     if (!profile || !application) return;
 
@@ -172,6 +202,28 @@ export default function ApplicationPackage() {
       );
     } finally {
       setIsGeneratingLetter(false);
+    }
+  }
+
+  async function handleDownloadLetter() {
+    if (!application?.coverLetter) return;
+
+    setIsExportingLetter(true);
+    setExportError('');
+
+    try {
+      await downloadCoverLetterPdf({
+        coverLetter: application.coverLetter,
+        company: application.company,
+        jobTitle: application.jobTitle,
+      });
+    } catch (err) {
+      console.error('Cover letter export error:', err);
+      setExportError(
+        err.message || 'Could not generate cover letter PDF. Please try again.',
+      );
+    } finally {
+      setIsExportingLetter(false);
     }
   }
 
@@ -291,16 +343,33 @@ export default function ApplicationPackage() {
         description={`${application.jobTitle} at ${application.company}`}
       />
 
+      {exportError && (
+        <div className="profile-status">
+          <ErrorState title="Export failed" message={exportError} />
+        </div>
+      )}
+
       <section className="page-section">
         <div className="section-header-row">
           <h2>Tailored Resume</h2>
-          <Button onClick={handleGenerateResume} disabled={isGeneratingResume}>
-            {isGeneratingResume
-              ? 'Generating...'
-              : resume
-              ? 'Regenerate Resume'
-              : 'Generate Resume'}
-          </Button>
+          <div className="button-row">
+            {resume && (
+              <Button
+                variant="secondary"
+                onClick={handleDownloadResume}
+                disabled={isExportingResume}
+              >
+                {isExportingResume ? 'Preparing PDF...' : 'Download Resume PDF'}
+              </Button>
+            )}
+            <Button onClick={handleGenerateResume} disabled={isGeneratingResume}>
+              {isGeneratingResume
+                ? 'Generating...'
+                : resume
+                ? 'Regenerate Resume'
+                : 'Generate Resume'}
+            </Button>
+          </div>
         </div>
 
         {resumeError && (
@@ -346,9 +415,20 @@ export default function ApplicationPackage() {
           {!isEditingLetter && (
             <div className="button-row">
               {letter && (
-                <Button variant="secondary" onClick={handleEditLetter}>
-                  Edit
-                </Button>
+                <>
+                  <Button variant="secondary" onClick={handleEditLetter}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleDownloadLetter}
+                    disabled={isExportingLetter}
+                  >
+                    {isExportingLetter
+                      ? 'Preparing PDF...'
+                      : 'Download Cover Letter PDF'}
+                  </Button>
+                </>
               )}
               <Button
                 onClick={handleGenerateLetter}
@@ -404,7 +484,10 @@ export default function ApplicationPackage() {
 
         {letterError && (
           <div className="profile-status">
-            <ErrorState title="Cover letter generation failed" message={letterError} />
+            <ErrorState
+              title="Cover letter generation failed"
+              message={letterError}
+            />
           </div>
         )}
 

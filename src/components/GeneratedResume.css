@@ -123,3 +123,34 @@
     white-space: normal;
   }
 }
+
+/* Print fallback for Ctrl+P. The primary export path is the PDF download button. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .generated-resume,
+  .generated-resume * {
+    visibility: visible;
+  }
+
+  .generated-resume {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+}

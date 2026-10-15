@@ -73,7 +73,7 @@ export function buildTrustedTerms(context = {}) {
 
     // Individual words of length >= 3
     for (const word of str.split(/\s+/)) {
-      const clean = word.replace(/[^A-Za-z0-9+#.\-]/g, '');
+      const clean = word.replace(/[^A-Za-z0-9+#.-]/g, '');
       if (clean.length >= 3) trusted.add(clean.toLowerCase());
     }
   };
@@ -100,7 +100,7 @@ export function extractKeyTerms(text, knownEntities) {
     if (i === 0) continue;
 
     const cleaned = words[i]
-      .replace(/[^A-Za-z0-9+#.\-]/g, '')
+      .replace(/[^A-Za-z0-9+#.-]/g, '')
       .replace(/^\.+|\.+$/g, '');
 
     if (!cleaned || cleaned.length < 2) continue;
