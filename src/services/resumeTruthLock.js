@@ -274,6 +274,9 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
+  // Certifications: copy URL and credentialId from the source profile. The AI
+  // cannot invent these — the truth lock enforces that the URL always comes
+  // from the user's stored profile.
   for (const cert of resume.certifications || []) {
     const source = findProfileCertification(profile, cert.name);
     if (!source) {
@@ -288,6 +291,8 @@ export function validateResumeAgainstProfile(profile, resume) {
       name: source.name || '',
       issuer: source.issuer || '',
       date: source.date || '',
+      url: source.url || '',
+      credentialId: source.credentialId || '',
     });
   }
 

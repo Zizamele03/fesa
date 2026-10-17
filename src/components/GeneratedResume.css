@@ -107,6 +107,24 @@
   font-size: 0.82rem;
 }
 
+.generated-resume-link {
+  color: #1f6feb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.generated-resume-link:hover {
+  color: #1558c4;
+}
+
+.generated-resume-link:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 @media (max-width: 600px) {
   .generated-resume {
     padding: 1.25rem;
@@ -147,6 +165,11 @@
     box-shadow: none;
     background: #ffffff;
     color: #000000;
+  }
+
+  .generated-resume-link {
+    color: #000000;
+    text-decoration: underline;
   }
 
   @page {

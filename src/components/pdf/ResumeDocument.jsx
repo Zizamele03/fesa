@@ -1,4 +1,5 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { getSafeHttpsUrl } from '../../utils/urlValidation.js';
 
 const styles = StyleSheet.create({
   page: {
@@ -80,6 +81,10 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: 9,
     color: '#444444',
+  },
+  link: {
+    color: '#1f6feb',
+    textDecoration: 'underline',
   },
 });
 
@@ -180,24 +185,31 @@ export default function ResumeDocument({ resume }) {
             <Text style={styles.sectionTitle} minPresenceAhead={40}>
               Projects
             </Text>
-            {projects.map((project, index) => (
-              <View key={index} style={styles.entry}>
-                <Text style={styles.position} minPresenceAhead={30}>
-                  {project.name || ''}
-                </Text>
-                {project.description ? (
-                  <Text style={styles.paragraph}>{project.description}</Text>
-                ) : null}
-                {(project.technologies || []).length > 0 ? (
-                  <Text style={styles.muted}>
-                    Technologies: {project.technologies.join(', ')}
+            {projects.map((project, index) => {
+              const safeUrl = getSafeHttpsUrl(project.url);
+              return (
+                <View key={index} style={styles.entry}>
+                  <Text style={styles.position} minPresenceAhead={30}>
+                    {project.name || ''}
                   </Text>
-                ) : null}
-                {project.url ? (
-                  <Text style={styles.muted}>{project.url}</Text>
-                ) : null}
-              </View>
-            ))}
+                  {project.description ? (
+                    <Text style={styles.paragraph}>{project.description}</Text>
+                  ) : null}
+                  {(project.technologies || []).length > 0 ? (
+                    <Text style={styles.muted}>
+                      Technologies: {project.technologies.join(', ')}
+                    </Text>
+                  ) : null}
+                  {safeUrl ? (
+                    <Link src={safeUrl} style={styles.link}>
+                      <Text style={styles.muted}>{safeUrl}</Text>
+                    </Link>
+                  ) : project.url ? (
+                    <Text style={styles.muted}>{project.url}</Text>
+                  ) : null}
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
@@ -236,12 +248,23 @@ export default function ResumeDocument({ resume }) {
             <Text style={styles.sectionTitle} minPresenceAhead={40}>
               Certifications
             </Text>
-            {certifications.map((cert, index) => (
-              <Text key={index} style={styles.bullet}>
-                •{' '}
-                {[cert.name, cert.issuer, cert.date].filter(Boolean).join(' — ')}
-              </Text>
-            ))}
+            {certifications.map((cert, index) => {
+              const safeUrl = getSafeHttpsUrl(cert.url);
+              return (
+                <Text key={index} style={styles.bullet}>
+                  •{' '}
+                  {safeUrl ? (
+                    <Link src={safeUrl} style={styles.link}>
+                      {cert.name}
+                    </Link>
+                  ) : (
+                    cert.name
+                  )}
+                  {cert.issuer ? ` — ${cert.issuer}` : ''}
+                  {cert.date ? ` (${cert.date})` : ''}
+                </Text>
+              );
+            })}
           </View>
         ) : null}
 

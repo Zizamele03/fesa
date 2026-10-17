@@ -7,6 +7,7 @@ import {
   createEmptyCertification,
   createEmptyAchievement,
 } from '../../data/careerProfileSchema.js';
+import { validateProfileUrl } from '../../utils/urlValidation.js';
 import './ProfileEditor.css';
 
 const SKILL_CATEGORY_LABELS = {
@@ -483,84 +484,93 @@ export default function ProfileEditor({ profile, onProfileChange }) {
         {profile.projects.length === 0 ? (
           <p className="section-empty">No projects yet.</p>
         ) : (
-          profile.projects.map((project, index) => (
-            <div className="editor-item" key={index}>
-              <div className="editor-item-header">
-                <h3>{project.name || 'Project'}</h3>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDeleteProject(index)}
-                >
-                  Delete
-                </Button>
+          profile.projects.map((project, index) => {
+            const urlCheck = validateProfileUrl(project.url);
+            return (
+              <div className="editor-item" key={index}>
+                <div className="editor-item-header">
+                  <h3>{project.name || 'Project'}</h3>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDeleteProject(index)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+                <div className="form-grid">
+                  <label>
+                    Name
+                    <input
+                      value={project.name}
+                      onChange={(e) =>
+                        handleProjectChange(index, 'name', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      value={project.description}
+                      onChange={(e) =>
+                        handleProjectChange(index, 'description', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Technologies (comma separated)
+                    <textarea
+                      value={project.technologies.join(', ')}
+                      onChange={(e) =>
+                        handleProjectChange(
+                          index,
+                          'technologies',
+                          e.target.value.split(',').map((r) => r.trim()).filter(Boolean),
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    URL
+                    <input
+                      type="url"
+                      value={project.url}
+                      onChange={(e) =>
+                        handleProjectChange(index, 'url', e.target.value)
+                      }
+                      placeholder="https://github.com/..."
+                      aria-invalid={!urlCheck.valid && !urlCheck.empty}
+                    />
+                    {!urlCheck.valid && !urlCheck.empty && (
+                      <span className="field-error">{urlCheck.error}</span>
+                    )}
+                  </label>
+                  <label>
+                    Role
+                    <input
+                      value={project.role}
+                      onChange={(e) =>
+                        handleProjectChange(index, 'role', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Achievements (comma separated)
+                    <textarea
+                      value={project.achievements.join(', ')}
+                      onChange={(e) =>
+                        handleProjectChange(
+                          index,
+                          'achievements',
+                          e.target.value.split(',').map((r) => r.trim()).filter(Boolean),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
               </div>
-              <div className="form-grid">
-                <label>
-                  Name
-                  <input
-                    value={project.name}
-                    onChange={(e) =>
-                      handleProjectChange(index, 'name', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Description
-                  <textarea
-                    value={project.description}
-                    onChange={(e) =>
-                      handleProjectChange(index, 'description', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Technologies (comma separated)
-                  <textarea
-                    value={project.technologies.join(', ')}
-                    onChange={(e) =>
-                      handleProjectChange(
-                        index,
-                        'technologies',
-                        e.target.value.split(',').map((r) => r.trim()).filter(Boolean),
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  URL
-                  <input
-                    value={project.url}
-                    onChange={(e) =>
-                      handleProjectChange(index, 'url', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Role
-                  <input
-                    value={project.role}
-                    onChange={(e) =>
-                      handleProjectChange(index, 'role', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Achievements (comma separated)
-                  <textarea
-                    value={project.achievements.join(', ')}
-                    onChange={(e) =>
-                      handleProjectChange(
-                        index,
-                        'achievements',
-                        e.target.value.split(',').map((r) => r.trim()).filter(Boolean),
-                      )
-                    }
-                  />
-                </label>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </SectionCard>
 
@@ -605,67 +615,82 @@ export default function ProfileEditor({ profile, onProfileChange }) {
         {profile.certifications.length === 0 ? (
           <p className="section-empty">No certifications yet.</p>
         ) : (
-          profile.certifications.map((cert, index) => (
-            <div className="editor-item" key={index}>
-              <div className="editor-item-header">
-                <h3>{cert.name || 'Certification'}</h3>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDeleteCertification(index)}
-                >
-                  Delete
-                </Button>
+          profile.certifications.map((cert, index) => {
+            const urlCheck = validateProfileUrl(cert.url);
+            return (
+              <div className="editor-item" key={index}>
+                <div className="editor-item-header">
+                  <h3>{cert.name || 'Certification'}</h3>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDeleteCertification(index)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+                <div className="form-grid">
+                  <label>
+                    Name
+                    <input
+                      value={cert.name}
+                      onChange={(e) =>
+                        handleCertificationChange(index, 'name', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Issuer
+                    <input
+                      value={cert.issuer}
+                      onChange={(e) =>
+                        handleCertificationChange(index, 'issuer', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Date
+                    <input
+                      value={cert.date}
+                      onChange={(e) =>
+                        handleCertificationChange(index, 'date', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Credential ID
+                    <input
+                      value={cert.credentialId}
+                      onChange={(e) =>
+                        handleCertificationChange(index, 'credentialId', e.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Certification URL (optional)
+                    <input
+                      type="url"
+                      value={cert.url}
+                      onChange={(e) =>
+                        handleCertificationChange(index, 'url', e.target.value)
+                      }
+                      placeholder="https://example.com/verify/abc123"
+                      aria-invalid={!urlCheck.valid && !urlCheck.empty}
+                    />
+                    {!urlCheck.valid && !urlCheck.empty && (
+                      <span className="field-error">{urlCheck.error}</span>
+                    )}
+                    {urlCheck.empty && (
+                      <span className="field-hint">
+                        Optional. Use an HTTPS link to the credential
+                        verification page.
+                      </span>
+                    )}
+                  </label>
+                </div>
               </div>
-              <div className="form-grid">
-                <label>
-                  Name
-                  <input
-                    value={cert.name}
-                    onChange={(e) =>
-                      handleCertificationChange(index, 'name', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Issuer
-                  <input
-                    value={cert.issuer}
-                    onChange={(e) =>
-                      handleCertificationChange(index, 'issuer', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Date
-                  <input
-                    value={cert.date}
-                    onChange={(e) =>
-                      handleCertificationChange(index, 'date', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  Credential ID
-                  <input
-                    value={cert.credentialId}
-                    onChange={(e) =>
-                      handleCertificationChange(index, 'credentialId', e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  URL
-                  <input
-                    value={cert.url}
-                    onChange={(e) =>
-                      handleCertificationChange(index, 'url', e.target.value)
-                    }
-                  />
-                </label>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </SectionCard>
 

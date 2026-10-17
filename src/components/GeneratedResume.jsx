@@ -1,3 +1,4 @@
+import { getSafeHttpsUrl } from '../utils/urlValidation.js';
 import './GeneratedResume.css';
 
 function Section({ title, children }) {
@@ -77,20 +78,35 @@ export default function GeneratedResume({ resume }) {
 
       {projects.length > 0 && (
         <Section title="Projects">
-          {projects.map((project, index) => (
-            <div key={`${project.name}-${index}`} className="generated-resume-entry">
-              <h4>{project.name}</h4>
-              {project.description && <p>{project.description}</p>}
-              {project.technologies.length > 0 && (
-                <p className="generated-resume-muted">
-                  {project.technologies.join(' · ')}
-                </p>
-              )}
-              {project.url && (
-                <p className="generated-resume-muted">{project.url}</p>
-              )}
-            </div>
-          ))}
+          {projects.map((project, index) => {
+            const safeUrl = getSafeHttpsUrl(project.url);
+            return (
+              <div key={`${project.name}-${index}`} className="generated-resume-entry">
+                <h4>{project.name}</h4>
+                {project.description && <p>{project.description}</p>}
+                {project.technologies.length > 0 && (
+                  <p className="generated-resume-muted">
+                    {project.technologies.join(' · ')}
+                  </p>
+                )}
+                {safeUrl && (
+                  <p className="generated-resume-muted">
+                    <a
+                      href={safeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="generated-resume-link"
+                    >
+                      {safeUrl}
+                    </a>
+                  </p>
+                )}
+                {!safeUrl && project.url && (
+                  <p className="generated-resume-muted">{project.url}</p>
+                )}
+              </div>
+            );
+          })}
         </Section>
       )}
 
@@ -116,13 +132,27 @@ export default function GeneratedResume({ resume }) {
       {certifications.length > 0 && (
         <Section title="Certifications">
           <ul>
-            {certifications.map((cert, index) => (
-              <li key={`${cert.name}-${index}`}>
-                {cert.name}
-                {cert.issuer ? ` — ${cert.issuer}` : ''}
-                {cert.date ? ` (${cert.date})` : ''}
-              </li>
-            ))}
+            {certifications.map((cert, index) => {
+              const safeUrl = getSafeHttpsUrl(cert.url);
+              return (
+                <li key={`${cert.name}-${index}`}>
+                  {safeUrl ? (
+                    <a
+                      href={safeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="generated-resume-link"
+                    >
+                      {cert.name}
+                    </a>
+                  ) : (
+                    cert.name
+                  )}
+                  {cert.issuer ? ` — ${cert.issuer}` : ''}
+                  {cert.date ? ` (${cert.date})` : ''}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       )}
