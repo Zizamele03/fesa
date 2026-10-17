@@ -61,6 +61,15 @@ export default function CareerProfile() {
   const handleBuildProfile = async () => {
     if (!extractedText.trim()) return;
 
+    // Protect user edits: if a profile already exists, confirm before replacing.
+    if (profile) {
+      const confirmed = window.confirm(
+        'This will replace your current Career Profile with a newly extracted one. ' +
+          'Any manual edits you have made will be lost. Continue?',
+      );
+      if (!confirmed) return;
+    }
+
     setIsBuilding(true);
     setBuildError('');
 
@@ -181,7 +190,9 @@ export default function CareerProfile() {
       {importStatus && (
         <div className="profile-status">
           <ErrorState
-            title={importStatus.type === 'success' ? 'Import complete' : 'Import failed'}
+            title={
+              importStatus.type === 'success' ? 'Import complete' : 'Import failed'
+            }
             message={importStatus.message}
           />
         </div>

@@ -19,9 +19,22 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function dedupeStrings(list) {
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    const str = asString(item).trim();
+    if (!str) continue;
+    const key = str.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(str);
+  }
+  return out;
+}
+
 function normalizePersonal(personal) {
   const source = asObject(personal);
-
   return {
     fullName: asString(source.fullName),
     email: asString(source.email),
@@ -37,7 +50,6 @@ function normalizeEducation(education) {
   return asArray(education).map((item) => {
     const source = asObject(item);
     const empty = createEmptyEducation();
-
     return {
       institution: asString(source.institution, empty.institution),
       qualification: asString(source.qualification, empty.qualification),
@@ -53,20 +65,18 @@ function normalizeExperience(experience) {
   return asArray(experience).map((item) => {
     const source = asObject(item);
     const empty = createEmptyExperience();
-
     return {
       company: asString(source.company, empty.company),
       position: asString(source.position, empty.position),
       location: asString(source.location, empty.location),
       startDate: asString(source.startDate, empty.startDate),
       endDate: asString(source.endDate, empty.endDate),
-      current: typeof source.current === 'boolean' ? source.current : empty.current,
+      current:
+        typeof source.current === 'boolean' ? source.current : empty.current,
       description: asString(source.description, empty.description),
-      responsibilities: asArray(source.responsibilities).map((entry) =>
-        asString(entry),
-      ),
-      achievements: asArray(source.achievements).map((entry) => asString(entry)),
-      technologies: asArray(source.technologies).map((entry) => asString(entry)),
+      responsibilities: dedupeStrings(asArray(source.responsibilities)),
+      achievements: dedupeStrings(asArray(source.achievements)),
+      technologies: dedupeStrings(asArray(source.technologies)),
     };
   });
 }
@@ -75,30 +85,31 @@ function normalizeProjects(projects) {
   return asArray(projects).map((item) => {
     const source = asObject(item);
     const empty = createEmptyProject();
-
     return {
       name: asString(source.name, empty.name),
       description: asString(source.description, empty.description),
-      technologies: asArray(source.technologies).map((entry) => asString(entry)),
+      technologies: dedupeStrings(asArray(source.technologies)),
       url: asString(source.url, empty.url),
       role: asString(source.role, empty.role),
-      achievements: asArray(source.achievements).map((entry) => asString(entry)),
+      achievements: dedupeStrings(asArray(source.achievements)),
     };
   });
 }
 
 function normalizeSkills(skills) {
   const source = asObject(skills);
-  const normalize = (value) => asArray(value).map((entry) => asString(entry));
-
+  const norm = (value) => dedupeStrings(asArray(value));
   return {
-    technical: normalize(source.technical),
-    soft: normalize(source.soft),
-    tools: normalize(source.tools),
-    languages: normalize(source.languages),
-    frameworks: normalize(source.frameworks),
-    databases: normalize(source.databases),
-    cloud: normalize(source.cloud),
+    technical: norm(source.technical),
+    soft: norm(source.soft),
+    tools: norm(source.tools),
+    languages: norm(source.languages),
+    queryLanguages: norm(source.queryLanguages),
+    humanLanguages: norm(source.humanLanguages),
+    frameworks: norm(source.frameworks),
+    databases: norm(source.databases),
+    cloud: norm(source.cloud),
+    uncertain: norm(source.uncertain),
   };
 }
 
@@ -106,7 +117,6 @@ function normalizeCertifications(certifications) {
   return asArray(certifications).map((item) => {
     const source = asObject(item);
     const empty = createEmptyCertification();
-
     return {
       name: asString(source.name, empty.name),
       issuer: asString(source.issuer, empty.issuer),
@@ -121,7 +131,6 @@ function normalizeAchievements(achievements) {
   return asArray(achievements).map((item) => {
     const source = asObject(item);
     const empty = createEmptyAchievement();
-
     return {
       title: asString(source.title, empty.title),
       description: asString(source.description, empty.description),
@@ -136,7 +145,9 @@ export function normalizeImportedProfile(input) {
   }
 
   const candidate =
-    input.profile && typeof input.profile === 'object' && !Array.isArray(input.profile)
+    input.profile &&
+    typeof input.profile === 'object' &&
+    !Array.isArray(input.profile)
       ? input.profile
       : input;
 

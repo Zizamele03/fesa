@@ -66,6 +66,10 @@ function getAliasesForCanonical(canonical) {
   return aliases;
 }
 
+// Categories inside profile.skills that should NOT be treated as confirmed
+// evidence. Items here are flagged for user review, not automatically usable.
+const NON_EVIDENCE_SKILL_CATEGORIES = new Set(['uncertain']);
+
 export function getCanonicalSkillSet(profile) {
   if (!profile || typeof profile !== 'object') return new Set();
 
@@ -76,7 +80,8 @@ export function getCanonicalSkillSet(profile) {
   };
 
   const skillGroups = asObject(profile.skills);
-  for (const list of Object.values(skillGroups)) {
+  for (const [category, list] of Object.entries(skillGroups)) {
+    if (NON_EVIDENCE_SKILL_CATEGORIES.has(category)) continue;
     asArray(list).forEach(add);
   }
   asArray(profile.projects).forEach((project) => {
@@ -183,21 +188,22 @@ export function getProfileTextSources(profile) {
     }
   });
 
-  // Include all listed skills, so a skill declared in the profile but not
-  // repeated in any experience/project is still treated as evidence.
-  const allSkills = [];
-  for (const list of Object.values(asObject(profile.skills))) {
+  // Include confirmed skill lists as evidence sources. Exclude categories
+  // that are not yet confirmed (e.g. `uncertain`).
+  const confirmedSkills = [];
+  for (const [category, list] of Object.entries(asObject(profile.skills))) {
+    if (NON_EVIDENCE_SKILL_CATEGORIES.has(category)) continue;
     for (const skill of asArray(list)) {
       const str = String(skill || '').trim();
-      if (str) allSkills.push(str);
+      if (str) confirmedSkills.push(str);
     }
   }
-  if (allSkills.length > 0) {
+  if (confirmedSkills.length > 0) {
     sources.push({
       sourceType: 'skill',
       sourceId: 'skills',
       sourceTitle: 'Skills',
-      text: allSkills.join(' '),
+      text: confirmedSkills.join(' '),
     });
   }
 

@@ -9,6 +9,26 @@ import {
 } from '../../data/careerProfileSchema.js';
 import './ProfileEditor.css';
 
+const SKILL_CATEGORY_LABELS = {
+  technical: 'Technical Skills',
+  soft: 'Soft Skills',
+  tools: 'Tools',
+  languages: 'Programming Languages',
+  queryLanguages: 'Query Languages',
+  humanLanguages: 'Human Languages',
+  frameworks: 'Frameworks & Libraries',
+  databases: 'Databases',
+  cloud: 'Cloud Platforms',
+  uncertain: 'Uncertain — Please Review',
+};
+
+function categoryLabel(category) {
+  return (
+    SKILL_CATEGORY_LABELS[category] ||
+    category[0].toUpperCase() + category.slice(1)
+  );
+}
+
 function updateNestedValue(obj, path, value) {
   const newObj = JSON.parse(JSON.stringify(obj));
   let current = newObj;
@@ -20,10 +40,7 @@ function updateNestedValue(obj, path, value) {
 }
 
 function updateArrayItem(array, index, field, value) {
-  const newArray = array.map((item, i) =>
-    i === index ? { ...item, [field]: value } : item,
-  );
-  return newArray;
+  return array.map((item, i) => (i === index ? { ...item, [field]: value } : item));
 }
 
 function removeArrayItem(array, index) {
@@ -147,27 +164,28 @@ export default function ProfileEditor({ profile, onProfileChange }) {
   };
 
   const handleSkillChange = (category, index, value) => {
+    const list = profile.skills[category] || [];
     const newSkills = {
       ...profile.skills,
-      [category]: profile.skills[category].map((skill, i) =>
-        i === index ? value : skill,
-      ),
+      [category]: list.map((skill, i) => (i === index ? value : skill)),
     };
     onProfileChange({ ...profile, skills: newSkills });
   };
 
   const handleAddSkill = (category) => {
+    const list = profile.skills[category] || [];
     const newSkills = {
       ...profile.skills,
-      [category]: [...profile.skills[category], ''],
+      [category]: [...list, ''],
     };
     onProfileChange({ ...profile, skills: newSkills });
   };
 
   const handleDeleteSkill = (category, index) => {
+    const list = profile.skills[category] || [];
     const newSkills = {
       ...profile.skills,
-      [category]: profile.skills[category].filter((_, i) => i !== index),
+      [category]: list.filter((_, i) => i !== index),
     };
     onProfileChange({ ...profile, skills: newSkills });
   };
@@ -549,7 +567,7 @@ export default function ProfileEditor({ profile, onProfileChange }) {
       <SectionCard title="Skills">
         {Object.entries(profile.skills).map(([category, skills]) => (
           <div className="skill-editor-group" key={category}>
-            <h3>{category[0].toUpperCase() + category.slice(1)}</h3>
+            <h3>{categoryLabel(category)}</h3>
             <div className="skill-editor-list">
               {skills.map((skill, skillIndex) => (
                 <div className="skill-editor-row" key={skillIndex}>

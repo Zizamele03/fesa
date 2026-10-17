@@ -2,10 +2,7 @@ export const MAX_RESUME_TEXT_LENGTH = 50000;
 
 export function validateResumeText(rawText) {
   if (typeof rawText !== 'string') {
-    return {
-      valid: false,
-      error: 'Resume text must be a string.',
-    };
+    return { valid: false, error: 'Resume text must be a string.' };
   }
 
   const text = rawText.trim();
@@ -24,10 +21,7 @@ export function validateResumeText(rawText) {
     };
   }
 
-  return {
-    valid: true,
-    text,
-  };
+  return { valid: true, text };
 }
 
 function asString(value, fallback = '') {
@@ -40,6 +34,26 @@ function asArray(value) {
 
 function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+/**
+ * Deduplicates an array of strings case-insensitively, preserving the
+ * original casing of the first occurrence.
+ */
+function dedupeStrings(list) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of list) {
+    const str = asString(item).trim();
+    if (!str) continue;
+    const key = str.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(str);
+  }
+
+  return out;
 }
 
 function normalizePersonal(personal) {
@@ -80,9 +94,9 @@ function normalizeExperience(experience) {
       endDate: asString(e.endDate),
       current: typeof e.current === 'boolean' ? e.current : false,
       description: asString(e.description),
-      responsibilities: asArray(e.responsibilities).map((r) => asString(r)),
-      achievements: asArray(e.achievements).map((a) => asString(a)),
-      technologies: asArray(e.technologies).map((t) => asString(t)),
+      responsibilities: dedupeStrings(asArray(e.responsibilities)),
+      achievements: dedupeStrings(asArray(e.achievements)),
+      technologies: dedupeStrings(asArray(e.technologies)),
     };
   });
 }
@@ -93,26 +107,29 @@ function normalizeProjects(projects) {
     return {
       name: asString(p.name),
       description: asString(p.description),
-      technologies: asArray(p.technologies).map((t) => asString(t)),
+      technologies: dedupeStrings(asArray(p.technologies)),
       url: asString(p.url),
       role: asString(p.role),
-      achievements: asArray(p.achievements).map((a) => asString(a)),
+      achievements: dedupeStrings(asArray(p.achievements)),
     };
   });
 }
 
 function normalizeSkills(skills) {
   const s = asObject(skills);
-  const normalizeSkillArray = (value) => asArray(value).map((x) => asString(x));
+  const norm = (value) => dedupeStrings(asArray(value));
 
   return {
-    technical: normalizeSkillArray(s.technical),
-    soft: normalizeSkillArray(s.soft),
-    tools: normalizeSkillArray(s.tools),
-    languages: normalizeSkillArray(s.languages),
-    frameworks: normalizeSkillArray(s.frameworks),
-    databases: normalizeSkillArray(s.databases),
-    cloud: normalizeSkillArray(s.cloud),
+    technical: norm(s.technical),
+    soft: norm(s.soft),
+    tools: norm(s.tools),
+    languages: norm(s.languages),
+    queryLanguages: norm(s.queryLanguages),
+    humanLanguages: norm(s.humanLanguages),
+    frameworks: norm(s.frameworks),
+    databases: norm(s.databases),
+    cloud: norm(s.cloud),
+    uncertain: norm(s.uncertain),
   };
 }
 
@@ -141,7 +158,11 @@ function normalizeAchievements(achievements) {
 }
 
 export function normalizeProfile(rawProfile) {
-  if (!rawProfile || typeof rawProfile !== 'object' || Array.isArray(rawProfile)) {
+  if (
+    !rawProfile ||
+    typeof rawProfile !== 'object' ||
+    Array.isArray(rawProfile)
+  ) {
     throw new Error('Invalid profile object returned from AI.');
   }
 
@@ -166,17 +187,17 @@ export function normalizeProfile(rawProfile) {
     achievements: normalizeAchievements(profile.achievements),
   };
 
-  // Final sanity checks
-  if (
-    !normalized.personal.fullName &&
-    normalized.education.length === 0 &&
-    normalized.experience.length === 0 &&
-    normalized.projects.length === 0 &&
-    normalized.skills.technical.length === 0 &&
-    normalized.skills.soft.length === 0 &&
-    normalized.certifications.length === 0 &&
-    normalized.achievements.length === 0
-  ) {
+  const hasContent =
+    normalized.personal.fullName ||
+    normalized.professionalSummary ||
+    normalized.education.length > 0 ||
+    normalized.experience.length > 0 ||
+    normalized.projects.length > 0 ||
+    Object.values(normalized.skills).some((list) => list.length > 0) ||
+    normalized.certifications.length > 0 ||
+    normalized.achievements.length > 0;
+
+  if (!hasContent) {
     throw new Error('AI returned an empty profile with no meaningful data.');
   }
 
