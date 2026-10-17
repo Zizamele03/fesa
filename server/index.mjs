@@ -4,6 +4,7 @@ import careerProfileRoutes from './routes/careerProfile.mjs';
 import jobAnalysisRoutes from './routes/jobAnalysis.mjs';
 import resumeRoutes from './routes/resume.mjs';
 import coverLetterRoutes from './routes/coverLetter.mjs';
+import matchAnalysisRoutes from './routes/matchAnalysis.mjs';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -23,6 +24,7 @@ app.use('/api/career-profile', careerProfileRoutes);
 app.use('/api/job-analysis', jobAnalysisRoutes);
 app.use('/api/resume', resumeRoutes);
 app.use('/api/cover-letter', coverLetterRoutes);
+app.use('/api/match', matchAnalysisRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled server error:', err);

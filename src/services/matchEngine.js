@@ -1,5 +1,5 @@
-import { canonicalizeSkill, STOP_WORDS } from './aliasMap.js';
-import { classifyRelationship } from './relatedTechnologies.js';
+import { canonicalizeSkill, STOP_WORDS } from "./aliasMap.js";
+import { classifyRelationship } from "./relatedTechnologies.js";
 import {
   getCanonicalSkillSet,
   getProfileTextSources,
@@ -7,7 +7,7 @@ import {
   findEvidenceForAnySkill,
   normalizeText,
   containsPhrase,
-} from './truthLock.js';
+} from "./truthLock.js";
 
 const WEIGHTS = {
   skills: 0.35,
@@ -17,9 +17,9 @@ const WEIGHTS = {
   keywords: 0.1,
 };
 
-function tokenize(value = '') {
+function tokenize(value = "") {
   return normalizeText(value)
-    .split(' ')
+    .split(" ")
     .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
 }
 
@@ -28,15 +28,26 @@ function asArray(value) {
 }
 
 function asObject(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
-function matchSkillRequirement(requirement, profile, importance, profileSkills) {
+function matchSkillRequirement(
+  requirement,
+  profile,
+  importance,
+  profileSkills,
+) {
   const rawRequirement = String(requirement).trim();
   if (!rawRequirement) return null;
 
   // Step 1: direct evidence (exact or alias)
-  const directEvidence = findEvidenceForSkill(profile, rawRequirement, profileSkills);
+  const directEvidence = findEvidenceForSkill(
+    profile,
+    rawRequirement,
+    profileSkills,
+  );
   if (directEvidence.length > 0) {
     const rawCanonical = canonicalizeSkill(rawRequirement);
     const isAlias = directEvidence.some(
@@ -46,10 +57,10 @@ function matchSkillRequirement(requirement, profile, importance, profileSkills) 
     );
     return {
       requirement: rawRequirement,
-      category: 'skills',
+      category: "skills",
       importance,
-      status: 'matched',
-      relationship: isAlias ? 'ALIAS_MATCH' : 'EXACT_MATCH',
+      status: "matched",
+      relationship: isAlias ? "ALIAS_MATCH" : "EXACT_MATCH",
       score: 100,
       evidence: directEvidence,
     };
@@ -79,10 +90,10 @@ function matchSkillRequirement(requirement, profile, importance, profileSkills) 
     if (contextEvidence.length > 0) {
       return {
         requirement: rawRequirement,
-        category: 'skills',
+        category: "skills",
         importance,
-        status: 'matched',
-        relationship: 'STRONG_CONTEXT_MATCH',
+        status: "matched",
+        relationship: "STRONG_CONTEXT_MATCH",
         score: 80,
         evidence: contextEvidence.slice(0, 3),
       };
@@ -95,12 +106,15 @@ function matchSkillRequirement(requirement, profile, importance, profileSkills) 
 
   for (const profileSkill of profileSkills) {
     const rel = classifyRelationship(profileSkill, rawRequirement);
-    if (rel === 'TRANSFERABLE') {
+    if (rel === "TRANSFERABLE") {
       relatedSkillNames.push(profileSkill);
-      bestRelationship = 'TRANSFERABLE';
-    } else if (rel === 'RELATED_BUT_DIFFERENT' && bestRelationship !== 'TRANSFERABLE') {
+      bestRelationship = "TRANSFERABLE";
+    } else if (
+      rel === "RELATED_BUT_DIFFERENT" &&
+      bestRelationship !== "TRANSFERABLE"
+    ) {
       relatedSkillNames.push(profileSkill);
-      bestRelationship = 'RELATED_BUT_DIFFERENT';
+      bestRelationship = "RELATED_BUT_DIFFERENT";
     }
   }
 
@@ -112,21 +126,21 @@ function matchSkillRequirement(requirement, profile, importance, profileSkills) 
     );
     return {
       requirement: rawRequirement,
-      category: 'skills',
+      category: "skills",
       importance,
-      status: 'partial',
+      status: "partial",
       relationship: bestRelationship,
-      score: bestRelationship === 'TRANSFERABLE' ? 55 : 30,
+      score: bestRelationship === "TRANSFERABLE" ? 55 : 30,
       evidence: relatedEvidence,
     };
   }
 
   return {
     requirement: rawRequirement,
-    category: 'skills',
+    category: "skills",
     importance,
-    status: 'missing',
-    relationship: 'MISSING',
+    status: "missing",
+    relationship: "MISSING",
     score: 0,
     evidence: [],
   };
@@ -137,7 +151,12 @@ function matchSkillsObject(skills, profile, importance, profileSkills) {
 
   for (const [category, list] of Object.entries(asObject(skills))) {
     asArray(list).forEach((skill) => {
-      const result = matchSkillRequirement(skill, profile, importance, profileSkills);
+      const result = matchSkillRequirement(
+        skill,
+        profile,
+        importance,
+        profileSkills,
+      );
       if (result) {
         results.push({ ...result, category: `skills.${category}` });
       }
@@ -149,47 +168,48 @@ function matchSkillsObject(skills, profile, importance, profileSkills) {
 
 function getEducationLevel(text) {
   const normalized = normalizeText(text);
-  if (normalized.includes('phd') || normalized.includes('doctor')) return 'doctorate';
-  if (normalized.includes('master')) return 'master';
+  if (normalized.includes("phd") || normalized.includes("doctor"))
+    return "doctorate";
+  if (normalized.includes("master")) return "master";
   if (
-    normalized.includes('bachelor') ||
-    normalized.includes('bsc') ||
-    normalized.includes('b.a') ||
-    normalized.includes('ba ')
+    normalized.includes("bachelor") ||
+    normalized.includes("bsc") ||
+    normalized.includes("b.a") ||
+    normalized.includes("ba ")
   ) {
-    return 'bachelor';
+    return "bachelor";
   }
-  if (normalized.includes('associate')) return 'associate';
-  if (normalized.includes('high school')) return 'highschool';
-  return '';
+  if (normalized.includes("associate")) return "associate";
+  if (normalized.includes("high school")) return "highschool";
+  return "";
 }
 
 function getEducationField(text) {
   const normalized = normalizeText(text);
   const fields = [
-    'computer science',
-    'software engineering',
-    'information systems',
-    'information technology',
-    'computer engineering',
-    'electrical engineering',
-    'engineering',
-    'business',
-    'data science',
-    'nursing',
-    'accounting',
-    'finance',
-    'marketing',
-    'law',
-    'medicine',
-    'education',
-    'psychology',
-    'biology',
-    'chemistry',
-    'physics',
-    'mathematics',
+    "computer science",
+    "software engineering",
+    "information systems",
+    "information technology",
+    "computer engineering",
+    "electrical engineering",
+    "engineering",
+    "business",
+    "data science",
+    "nursing",
+    "accounting",
+    "finance",
+    "marketing",
+    "law",
+    "medicine",
+    "education",
+    "psychology",
+    "biology",
+    "chemistry",
+    "physics",
+    "mathematics",
   ];
-  return fields.find((field) => normalized.includes(field)) || '';
+  return fields.find((field) => normalized.includes(field)) || "";
 }
 
 function matchEducationRequirement(requirement, profile) {
@@ -203,7 +223,7 @@ function matchEducationRequirement(requirement, profile) {
 
   asArray(profile.education).forEach((edu, index) => {
     const itemText = normalizeText(
-      `${edu.qualification || ''} ${edu.fieldOfStudy || ''} ${edu.institution || ''}`,
+      `${edu.qualification || ""} ${edu.fieldOfStudy || ""} ${edu.institution || ""}`,
     );
     const itemLevel = getEducationLevel(itemText);
     const itemField = getEducationField(itemText);
@@ -216,10 +236,11 @@ function matchEducationRequirement(requirement, profile) {
 
     if (matched || partial) {
       evidence.push({
-        sourceType: 'education',
+        sourceType: "education",
         sourceId: edu.id || `education-${index}`,
-        sourceTitle: `${edu.qualification || ''} ${edu.fieldOfStudy || ''}`.trim(),
-        text: `${edu.qualification || ''} ${edu.fieldOfStudy || ''} - ${edu.institution || ''}`.trim(),
+        sourceTitle:
+          `${edu.qualification || ""} ${edu.fieldOfStudy || ""}`.trim(),
+        text: `${edu.qualification || ""} ${edu.fieldOfStudy || ""} - ${edu.institution || ""}`.trim(),
       });
     }
   });
@@ -227,10 +248,10 @@ function matchEducationRequirement(requirement, profile) {
   if (matched) {
     return {
       requirement: rawRequirement,
-      category: 'education',
-      importance: 'required',
-      status: 'matched',
-      relationship: 'EXACT_MATCH',
+      category: "education",
+      importance: "required",
+      status: "matched",
+      relationship: "EXACT_MATCH",
       score: 100,
       evidence: evidence.slice(0, 1),
     };
@@ -239,10 +260,10 @@ function matchEducationRequirement(requirement, profile) {
   if (partial) {
     return {
       requirement: rawRequirement,
-      category: 'education',
-      importance: 'required',
-      status: 'partial',
-      relationship: 'PARTIAL_MATCH',
+      category: "education",
+      importance: "required",
+      status: "partial",
+      relationship: "PARTIAL_MATCH",
       score: 50,
       evidence: evidence.slice(0, 1),
     };
@@ -250,10 +271,10 @@ function matchEducationRequirement(requirement, profile) {
 
   return {
     requirement: rawRequirement,
-    category: 'education',
-    importance: 'required',
-    status: 'missing',
-    relationship: 'MISSING',
+    category: "education",
+    importance: "required",
+    status: "missing",
+    relationship: "MISSING",
     score: 0,
     evidence: [],
   };
@@ -267,7 +288,7 @@ function buildExperienceText(experienceItem) {
     ...asArray(experienceItem.technologies),
   ]
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
 }
 
 function matchExperienceRequirement(requirement, profile) {
@@ -279,10 +300,10 @@ function matchExperienceRequirement(requirement, profile) {
   if (requirementTokens.length === 0) {
     return {
       requirement: rawRequirement,
-      category: 'experience',
-      importance: 'required',
-      status: 'unverified',
-      relationship: 'UNVERIFIED',
+      category: "experience",
+      importance: "required",
+      status: "unverified",
+      relationship: "UNVERIFIED",
       score: 0,
       evidence: [],
     };
@@ -302,10 +323,12 @@ function matchExperienceRequirement(requirement, profile) {
       bestRatio = ratio;
       bestEvidence = [
         {
-          sourceType: 'experience',
+          sourceType: "experience",
           sourceId: job.id || `experience-${index}`,
-          sourceTitle: `${job.position || 'Role'} at ${job.company || 'Company'}`,
-          text: job.description || `${job.position || 'Role'} at ${job.company || 'Company'}`,
+          sourceTitle: `${job.position || "Role"} at ${job.company || "Company"}`,
+          text:
+            job.description ||
+            `${job.position || "Role"} at ${job.company || "Company"}`,
         },
       ];
     }
@@ -314,10 +337,10 @@ function matchExperienceRequirement(requirement, profile) {
   if (bestRatio >= 0.6) {
     return {
       requirement: rawRequirement,
-      category: 'experience',
-      importance: 'required',
-      status: 'matched',
-      relationship: 'STRONG_CONTEXT_MATCH',
+      category: "experience",
+      importance: "required",
+      status: "matched",
+      relationship: "STRONG_CONTEXT_MATCH",
       score: Math.round(bestRatio * 100),
       evidence: bestEvidence,
     };
@@ -326,10 +349,10 @@ function matchExperienceRequirement(requirement, profile) {
   if (bestRatio >= 0.35) {
     return {
       requirement: rawRequirement,
-      category: 'experience',
-      importance: 'required',
-      status: 'partial',
-      relationship: 'PARTIAL_MATCH',
+      category: "experience",
+      importance: "required",
+      status: "partial",
+      relationship: "PARTIAL_MATCH",
       score: Math.round(bestRatio * 100),
       evidence: bestEvidence,
     };
@@ -337,10 +360,10 @@ function matchExperienceRequirement(requirement, profile) {
 
   return {
     requirement: rawRequirement,
-    category: 'experience',
-    importance: 'required',
-    status: 'missing',
-    relationship: 'MISSING',
+    category: "experience",
+    importance: "required",
+    status: "missing",
+    relationship: "MISSING",
     score: 0,
     evidence: [],
   };
@@ -353,7 +376,7 @@ function buildProjectText(project) {
     ...asArray(project.achievements),
   ]
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
 }
 
 function matchProjectRequirement(requirement, profile) {
@@ -365,10 +388,10 @@ function matchProjectRequirement(requirement, profile) {
   if (requirementTokens.length === 0) {
     return {
       requirement: rawRequirement,
-      category: 'projects',
-      importance: 'preferred',
-      status: 'unverified',
-      relationship: 'UNVERIFIED',
+      category: "projects",
+      importance: "preferred",
+      status: "unverified",
+      relationship: "UNVERIFIED",
       score: 0,
       evidence: [],
     };
@@ -388,10 +411,10 @@ function matchProjectRequirement(requirement, profile) {
       bestRatio = ratio;
       bestEvidence = [
         {
-          sourceType: 'project',
+          sourceType: "project",
           sourceId: project.id || `project-${index}`,
-          sourceTitle: project.name || 'Project',
-          text: project.description || project.name || 'Project',
+          sourceTitle: project.name || "Project",
+          text: project.description || project.name || "Project",
         },
       ];
     }
@@ -400,10 +423,10 @@ function matchProjectRequirement(requirement, profile) {
   if (bestRatio >= 0.5) {
     return {
       requirement: rawRequirement,
-      category: 'projects',
-      importance: 'preferred',
-      status: 'matched',
-      relationship: 'STRONG_CONTEXT_MATCH',
+      category: "projects",
+      importance: "preferred",
+      status: "matched",
+      relationship: "STRONG_CONTEXT_MATCH",
       score: Math.round(bestRatio * 100),
       evidence: bestEvidence,
     };
@@ -411,20 +434,24 @@ function matchProjectRequirement(requirement, profile) {
 
   return {
     requirement: rawRequirement,
-    category: 'projects',
-    importance: 'preferred',
-    status: 'missing',
-    relationship: 'MISSING',
+    category: "projects",
+    importance: "preferred",
+    status: "missing",
+    relationship: "MISSING",
     score: 0,
     evidence: [],
   };
 }
 
 function matchKeywordList(keywords, profile) {
-  const keywordList = asArray(keywords).map((k) => String(k).trim()).filter(Boolean);
+  const keywordList = asArray(keywords)
+    .map((k) => String(k).trim())
+    .filter(Boolean);
   if (keywordList.length === 0) return { score: 100, matches: [] };
 
-  const sourceTexts = getProfileTextSources(profile).map((source) => source.text);
+  const sourceTexts = getProfileTextSources(profile).map(
+    (source) => source.text,
+  );
 
   const matches = [];
 
@@ -432,31 +459,36 @@ function matchKeywordList(keywords, profile) {
     const tokens = tokenize(keyword);
     if (tokens.length === 0) return;
 
-    const exactPresent = sourceTexts.some((text) => containsPhrase(text, keyword));
+    const exactPresent = sourceTexts.some((text) =>
+      containsPhrase(text, keyword),
+    );
     const presentTokens = tokens.filter((token) =>
       sourceTexts.some((text) => containsPhrase(text, token)),
     );
     const partialRatio = presentTokens.length / tokens.length;
 
-    let status = 'missing';
-    let relationship = 'MISSING';
+    let status = "missing";
+    let relationship = "MISSING";
     let score = 0;
 
     if (exactPresent) {
-      status = 'matched';
-      relationship = 'EXACT_MATCH';
+      status = "matched";
+      relationship = "EXACT_MATCH";
       score = 100;
     } else if (partialRatio >= 0.6) {
-      status = 'partial';
-      relationship = 'PARTIAL_MATCH';
-      score = Math.round(partialRatio * 100);
+      status = "partial";
+      relationship = "PARTIAL_MATCH";
+      // Partial keyword matches must not display as 100%. Even when all tokens
+      // appear separately in the profile, the exact phrase was not found, so
+      // the score should stay below full-match territory.
+      score = Math.min(85, Math.round(partialRatio * 100));
     }
 
-    if (status !== 'missing') {
+    if (status !== "missing") {
       matches.push({
         requirement: keyword,
-        category: 'keywords',
-        importance: 'preferred',
+        category: "keywords",
+        importance: "preferred",
         status,
         relationship,
         score,
@@ -475,24 +507,30 @@ function calculateSkills(profile, jobAnalysis, profileSkills) {
   const requiredResults = matchSkillsObject(
     jobAnalysis.requiredSkills,
     profile,
-    'required',
+    "required",
     profileSkills,
   );
   const preferredResults = matchSkillsObject(
     jobAnalysis.preferredSkills,
     profile,
-    'preferred',
+    "preferred",
     profileSkills,
   );
 
   const requiredTotal = requiredResults.length;
   const preferredTotal = preferredResults.length;
 
-  const requiredMatched = requiredResults.filter((r) => r.status === 'matched').length;
-  const preferredMatched = preferredResults.filter((r) => r.status === 'matched').length;
+  const requiredMatched = requiredResults.filter(
+    (r) => r.status === "matched",
+  ).length;
+  const preferredMatched = preferredResults.filter(
+    (r) => r.status === "matched",
+  ).length;
 
-  const requiredScore = requiredTotal > 0 ? (requiredMatched / requiredTotal) * 100 : 100;
-  const preferredScore = preferredTotal > 0 ? (preferredMatched / preferredTotal) * 100 : 100;
+  const requiredScore =
+    requiredTotal > 0 ? (requiredMatched / requiredTotal) * 100 : 100;
+  const preferredScore =
+    preferredTotal > 0 ? (preferredMatched / preferredTotal) * 100 : 100;
 
   let score;
   if (requiredTotal > 0 && preferredTotal > 0) {
@@ -522,9 +560,10 @@ function calculateEducation(profile, jobAnalysis) {
     matchEducationRequirement(requirement, profile),
   );
 
-  const matchedCount = results.filter((r) => r.status === 'matched').length;
-  const partialCount = results.filter((r) => r.status === 'partial').length;
-  const score = ((matchedCount + partialCount * 0.5) / requirements.length) * 100;
+  const matchedCount = results.filter((r) => r.status === "matched").length;
+  const partialCount = results.filter((r) => r.status === "partial").length;
+  const score =
+    ((matchedCount + partialCount * 0.5) / requirements.length) * 100;
 
   return { score: Math.round(score), results };
 }
@@ -569,17 +608,17 @@ function calculateProjects(profile, jobAnalysis) {
 }
 
 function validateProfile(profile) {
-  if (!profile || typeof profile !== 'object') {
-    throw new Error('Career Profile is invalid or missing.');
+  if (!profile || typeof profile !== "object") {
+    throw new Error("Career Profile is invalid or missing.");
   }
 }
 
 function validateJobAnalysis(jobAnalysis) {
-  if (!jobAnalysis || typeof jobAnalysis !== 'object') {
-    throw new Error('Job Analysis is invalid or missing.');
+  if (!jobAnalysis || typeof jobAnalysis !== "object") {
+    throw new Error("Job Analysis is invalid or missing.");
   }
   if (!jobAnalysis.requiredSkills || !jobAnalysis.preferredSkills) {
-    throw new Error('Job Analysis is missing required skills data.');
+    throw new Error("Job Analysis is missing required skills data.");
   }
 }
 
@@ -612,29 +651,29 @@ export function computeMatch(profile, jobAnalysis) {
   ];
 
   const strongMatches = requirements
-    .filter((item) => item.status === 'matched' && item.score >= 80)
+    .filter((item) => item.status === "matched" && item.score >= 80)
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
 
   const missingRequirements = requirements.filter(
-    (item) => item.status === 'missing' && item.importance === 'required',
+    (item) => item.status === "missing" && item.importance === "required",
   );
 
   const partialMatches = requirements.filter(
     (item) =>
-      item.status === 'partial' &&
-      item.relationship !== 'RELATED_BUT_DIFFERENT' &&
-      item.relationship !== 'TRANSFERABLE',
+      item.status === "partial" &&
+      item.relationship !== "RELATED_BUT_DIFFERENT" &&
+      item.relationship !== "TRANSFERABLE",
   );
 
   const relatedOrTransferable = requirements.filter(
     (item) =>
-      item.relationship === 'RELATED_BUT_DIFFERENT' ||
-      item.relationship === 'TRANSFERABLE',
+      item.relationship === "RELATED_BUT_DIFFERENT" ||
+      item.relationship === "TRANSFERABLE",
   );
 
   const unverifiedRequirements = requirements.filter(
-    (item) => item.status === 'unverified',
+    (item) => item.status === "unverified",
   );
 
   return {
@@ -657,12 +696,12 @@ export function computeMatch(profile, jobAnalysis) {
 }
 
 export const MATCH_RELATIONSHIPS = Object.freeze({
-  EXACT_MATCH: 'EXACT_MATCH',
-  ALIAS_MATCH: 'ALIAS_MATCH',
-  STRONG_CONTEXT_MATCH: 'STRONG_CONTEXT_MATCH',
-  PARTIAL_MATCH: 'PARTIAL_MATCH',
-  TRANSFERABLE: 'TRANSFERABLE',
-  RELATED_BUT_DIFFERENT: 'RELATED_BUT_DIFFERENT',
-  MISSING: 'MISSING',
-  UNVERIFIED: 'UNVERIFIED',
+  EXACT_MATCH: "EXACT_MATCH",
+  ALIAS_MATCH: "ALIAS_MATCH",
+  STRONG_CONTEXT_MATCH: "STRONG_CONTEXT_MATCH",
+  PARTIAL_MATCH: "PARTIAL_MATCH",
+  TRANSFERABLE: "TRANSFERABLE",
+  RELATED_BUT_DIFFERENT: "RELATED_BUT_DIFFERENT",
+  MISSING: "MISSING",
+  UNVERIFIED: "UNVERIFIED",
 });

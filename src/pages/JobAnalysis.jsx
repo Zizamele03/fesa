@@ -10,6 +10,8 @@ import LoadingState from '../components/LoadingState.jsx';
 import { loadProfile } from '../services/careerProfileStore.js';
 import { updateApplication } from '../services/applicationStore.js';
 import { computeMatch } from '../services/matchEngine.js';
+import { buildAiRequest, mergeAiSuggestions } from '../services/aiMatchMerge.js';
+import { fetchAiMatchSuggestions } from '../services/matchSuggestionApi.js';
 
 function SkillGroup({ title, skills }) {
   const hasSkills =
@@ -96,18 +98,55 @@ function JobAnalysis() {
         return;
       }
 
-      const matchAnalysis = computeMatch(profile, analysis);
+      // 1. Deterministic match — always runs first.
+      const baseMatch = computeMatch(profile, analysis);
+
+      // 2. Try AI assistance for requirements still marked missing.
+      let finalMatch = baseMatch;
+      let aiStatus = 'skipped';
+      let aiCount = 0;
+
+      const { requirements: aiReqs, evidence: aiEvidence } = buildAiRequest(
+        baseMatch,
+        profile,
+      );
+
+      if (aiReqs.length > 0 && aiEvidence.length > 0) {
+        try {
+          const { suggestions } = await fetchAiMatchSuggestions({
+            requirements: aiReqs,
+            evidence: aiEvidence,
+          });
+
+          if (suggestions.length > 0) {
+            finalMatch = mergeAiSuggestions(baseMatch, suggestions, profile);
+            aiCount = finalMatch.aiAssistedCount || 0;
+            aiStatus = aiCount > 0 ? 'used' : 'no_improvement';
+          } else {
+            aiStatus = 'no_improvement';
+          }
+        } catch (aiError) {
+          console.warn('AI match assistance unavailable:', aiError);
+          aiStatus = 'unavailable';
+        }
+      }
+
+      const savedMatch = {
+        ...finalMatch,
+        aiStatus,
+        aiAssistedCount: aiCount,
+      };
 
       if (applicationId) {
         try {
-          await updateApplication(applicationId, { matchAnalysis });
+          await updateApplication(applicationId, { matchAnalysis: savedMatch });
         } catch (persistError) {
           console.warn('Could not save match analysis:', persistError);
         }
       }
 
       navigate('/match-analysis', {
-        state: { matchAnalysis, jobAnalysis: analysis, applicationId },
+        state: { matchAnalysis: savedMatch, jobAnalysis: analysis, applicationId },
       });
     } catch (error) {
       console.error('Match analysis error:', error);

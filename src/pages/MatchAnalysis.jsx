@@ -37,13 +37,20 @@ function RequirementItem({ item }) {
               </Badge>
             )}
             {item.importance && (
-              <span>{item.importance === 'required' ? 'Required' : 'Preferred'}</span>
+              <span>
+                {item.importance === 'required' ? 'Required' : 'Preferred'}
+              </span>
             )}
             {item.category && <span>{item.category}</span>}
+            {item.aiAssisted && <Badge tone="info">AI-assisted</Badge>}
           </div>
         </div>
         <span className="requirement-score">{item.score}%</span>
       </div>
+
+      {item.explanation && (
+        <p className="requirement-explanation">{item.explanation}</p>
+      )}
 
       {item.evidence?.length > 0 && (
         <div className="requirement-evidence">
@@ -60,9 +67,9 @@ function RequirementItem({ item }) {
   );
 }
 
-function RequirementList({ items }) {
+function RequirementList({ items, emptyText = 'Nothing to show.' }) {
   if (!items || items.length === 0) {
-    return <p className="section-empty">Nothing to show.</p>;
+    return <p className="section-empty">{emptyText}</p>;
   }
   return (
     <div className="match-list">
@@ -73,6 +80,56 @@ function RequirementList({ items }) {
       ))}
     </div>
   );
+}
+
+function AiStatusBanner({ matchAnalysis }) {
+  const status = matchAnalysis.aiStatus;
+  if (!status) return null;
+
+  if (status === 'used') {
+    return (
+      <div className="profile-status">
+        <Card>
+          <p>
+            AI-assisted terminology matching was applied to{' '}
+            {matchAnalysis.aiAssistedCount} requirement
+            {matchAnalysis.aiAssistedCount === 1 ? '' : 's'}. These are
+            additional <em>related</em> relationships, not confirmed matches.
+            All underlying evidence comes from your Career Profile.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <div className="profile-status">
+        <Card>
+          <p>
+            AI-assisted terminology matching was unavailable. The results below
+            are the deterministic evidence-based comparison of your Career
+            Profile against the job requirements.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (status === 'no_improvement') {
+    return (
+      <div className="profile-status">
+        <Card>
+          <p>
+            AI-assisted terminology matching found no additional related
+            relationships beyond what deterministic matching already identified.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function MatchAnalysis() {
@@ -117,6 +174,8 @@ export default function MatchAnalysis() {
           </Button>
         }
       />
+
+      <AiStatusBanner matchAnalysis={matchAnalysis} />
 
       <div className="analysis-overview">
         <Card>
