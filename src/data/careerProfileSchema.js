@@ -27,6 +27,7 @@ export const EMPTY_PROFILE = {
   },
   certifications: [],
   achievements: [],
+  references: [],
 };
 
 export function createEmptyProfile() {
@@ -85,5 +86,17 @@ export function createEmptyAchievement() {
     title: '',
     description: '',
     date: '',
+  };
+}
+
+export function createEmptyReference() {
+  return {
+    name: '',
+    title: '',
+    organization: '',
+    relationship: '',
+    email: '',
+    phone: '',
+    notes: '',
   };
 }

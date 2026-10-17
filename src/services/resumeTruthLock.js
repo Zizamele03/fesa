@@ -3,6 +3,7 @@ import { getCanonicalSkillSet, containsPhrase, normalizeText } from './truthLock
 import {
   collectKnownEntities,
   validateTextAgainstSource,
+  splitIntoSentences,
 } from './claimExtraction.js';
 
 function buildExperienceSourceText(job) {
@@ -87,7 +88,82 @@ function findProfileAchievement(profile, title) {
   });
 }
 
-export function validateResumeAgainstProfile(profile, resume) {
+function buildCombinedSourceText(profile) {
+  return [
+    profile.professionalSummary,
+    ...(profile.experience || []).map((j) => buildExperienceSourceText(j)),
+    ...(profile.projects || []).map((p) => buildProjectSourceText(p)),
+    ...(profile.education || []).map(
+      (e) => `${e.qualification || ''} ${e.fieldOfStudy || ''} ${e.institution || ''}`,
+    ),
+    ...Object.values(profile.skills || {}).flatMap((list) =>
+      Array.isArray(list) ? list : [],
+    ),
+    ...(profile.certifications || []).map((c) => `${c.name || ''} ${c.issuer || ''}`),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * Validate a summary per sentence. Keeps supported sentences. Drops only the
+ * offending ones. If the AI summary is missing or fully stripped, falls back
+ * to the profile's own professionalSummary (already trusted user data).
+ *
+ * Returns { summary: string, violations: [] }.
+ */
+function validateSummary(resume, profile, knownEntities) {
+  const violations = [];
+  const combinedSource = buildCombinedSourceText(profile);
+
+  const rawSummary =
+    typeof resume.summary === 'string' ? resume.summary.trim() : '';
+
+  if (!rawSummary) {
+    // Fallback: use the user's own professionalSummary (already in the profile,
+    // therefore already trusted).
+    if (profile.professionalSummary && profile.professionalSummary.trim()) {
+      return { summary: profile.professionalSummary.trim(), violations };
+    }
+    return { summary: '', violations };
+  }
+
+  const sentences = splitIntoSentences(rawSummary);
+  const validSentences = [];
+
+  for (const sentence of sentences) {
+    const { supported, missing } = validateTextAgainstSource(
+      sentence,
+      combinedSource,
+      knownEntities,
+    );
+    if (supported) {
+      validSentences.push(sentence);
+    } else {
+      violations.push({
+        field: 'summary',
+        claim: sentence,
+        reason: `Removed summary sentence with unsupported terms: ${missing.join(', ')}`,
+      });
+    }
+  }
+
+  const result = validSentences.join(' ').trim();
+
+  if (result) {
+    return { summary: result, violations };
+  }
+
+  // All sentences were stripped. Fall back to the profile's own summary if it
+  // exists; otherwise leave the summary empty and let the user write their own.
+  if (profile.professionalSummary && profile.professionalSummary.trim()) {
+    return { summary: profile.professionalSummary.trim(), violations };
+  }
+
+  return { summary: '', violations };
+}
+
+export function validateResumeAgainstProfile(profile, resume, options = {}) {
   if (!profile || typeof profile !== 'object') {
     throw new Error('Career Profile is required for truth validation.');
   }
@@ -98,6 +174,7 @@ export function validateResumeAgainstProfile(profile, resume) {
   const knownEntities = collectKnownEntities(profile);
   const profileSkills = getCanonicalSkillSet(profile);
   const violations = [];
+
   const validated = {
     schemaVersion: 1,
     contact: {},
@@ -108,6 +185,9 @@ export function validateResumeAgainstProfile(profile, resume) {
     education: [],
     certifications: [],
     achievements: [],
+    references: [],
+    referencesIncluded: false,
+    userEdited: false,
   };
 
   validated.contact = {
@@ -122,39 +202,12 @@ export function validateResumeAgainstProfile(profile, resume) {
     ].filter(Boolean),
   };
 
-  if (resume.summary && typeof resume.summary === 'string') {
-    const sources = (profile.experience || []).map((j) => buildExperienceSourceText(j));
-    const projectSources = (profile.projects || []).map((p) => buildProjectSourceText(p));
-    const combined = [
-      profile.professionalSummary,
-      ...sources,
-      ...projectSources,
-      ...(profile.education || []).map(
-        (e) => `${e.qualification || ''} ${e.fieldOfStudy || ''} ${e.institution || ''}`,
-      ),
-      ...Object.values(profile.skills || {}).flatMap((list) =>
-        Array.isArray(list) ? list : [],
-      ),
-    ]
-      .filter(Boolean)
-      .join(' ');
+  // Summary (per-sentence validation with profile fallback)
+  const summaryResult = validateSummary(resume, profile, knownEntities);
+  validated.summary = summaryResult.summary;
+  violations.push(...summaryResult.violations);
 
-    const { supported, missing } = validateTextAgainstSource(
-      resume.summary,
-      combined,
-      knownEntities,
-    );
-    if (supported) {
-      validated.summary = resume.summary;
-    } else {
-      violations.push({
-        field: 'summary',
-        claim: resume.summary,
-        reason: `Summary introduced unsupported terms: ${missing.join(', ')}`,
-      });
-    }
-  }
-
+  // Skills
   for (const group of resume.skillGroups || []) {
     const validItems = [];
     for (const item of group.items || []) {
@@ -174,6 +227,7 @@ export function validateResumeAgainstProfile(profile, resume) {
     }
   }
 
+  // Experience
   for (const job of resume.experience || []) {
     const source = findProfileExperience(profile, job.company, job.position);
     if (!source) {
@@ -224,6 +278,7 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
+  // Projects
   for (const project of resume.projects || []) {
     const source = findProfileProject(profile, project.name);
     if (!source) {
@@ -254,6 +309,7 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
+  // Education
   for (const edu of resume.education || []) {
     const source = findProfileEducation(profile, edu.institution, edu.qualification);
     if (!source) {
@@ -274,9 +330,7 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
-  // Certifications: copy URL and credentialId from the source profile. The AI
-  // cannot invent these — the truth lock enforces that the URL always comes
-  // from the user's stored profile.
+  // Certifications
   for (const cert of resume.certifications || []) {
     const source = findProfileCertification(profile, cert.name);
     if (!source) {
@@ -296,6 +350,7 @@ export function validateResumeAgainstProfile(profile, resume) {
     });
   }
 
+  // Achievements
   for (const achievement of resume.achievements || []) {
     const source = findProfileAchievement(profile, achievement.title);
     if (!source) {
@@ -312,6 +367,27 @@ export function validateResumeAgainstProfile(profile, resume) {
       date: source.date || '',
     });
   }
+
+  // References — copied from profile, never from AI. Preserve previous
+  // referencesIncluded flag if present; otherwise default false.
+  const profileReferences = Array.isArray(profile.references) ? profile.references : [];
+  if (profileReferences.length > 0) {
+    validated.references = profileReferences.map((r) => ({
+      name: r.name || '',
+      title: r.title || '',
+      organization: r.organization || '',
+      relationship: r.relationship || '',
+      email: r.email || '',
+      phone: r.phone || '',
+      notes: r.notes || '',
+    }));
+    validated.referencesIncluded = Boolean(options.referencesIncluded);
+  } else {
+    validated.references = [];
+    validated.referencesIncluded = false;
+  }
+
+  validated.userEdited = Boolean(options.userEdited);
 
   return {
     resume: validated,

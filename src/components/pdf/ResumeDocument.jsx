@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
 import { getSafeHttpsUrl } from '../../utils/urlValidation.js';
+import { getOrderedSections, getSectionLabel } from '../../utils/resumeSectionOrder.js';
 
 const styles = StyleSheet.create({
   page: {
@@ -100,19 +101,225 @@ function ContactLine({ contact }) {
   return <Text style={styles.contactLine}>{bits.join('  •  ')}</Text>;
 }
 
-export default function ResumeDocument({ resume }) {
+function SummaryBlock({ resume }) {
+  if (!resume.summary) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('summary')}
+      </Text>
+      <Text style={styles.paragraph}>{resume.summary}</Text>
+    </View>
+  );
+}
+
+function SkillsBlock({ resume }) {
+  if (!resume.skillGroups.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('skills')}
+      </Text>
+      {resume.skillGroups.map((group, index) => (
+        <Text key={index} style={styles.skillRow}>
+          <Text style={styles.skillLabel}>{group.label}: </Text>
+          {(group.items || []).join(', ')}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function ExperienceBlock({ resume }) {
+  if (!resume.experience.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('experience')}
+      </Text>
+      {resume.experience.map((job, index) => (
+        <View key={index} style={styles.entry}>
+          <View style={styles.entryHeader} minPresenceAhead={30}>
+            <Text style={styles.position}>{job.position || ''}</Text>
+            {job.dates ? <Text style={styles.dates}>{job.dates}</Text> : null}
+          </View>
+          {(job.company || job.location) && (
+            <Text style={styles.subline}>
+              {[job.company, job.location].filter(Boolean).join(' • ')}
+            </Text>
+          )}
+          {(job.bullets || []).map((bullet, bulletIndex) => (
+            <Text key={bulletIndex} style={styles.bullet}>
+              • {bullet}
+            </Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function EducationBlock({ resume }) {
+  if (!resume.education.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('education')}
+      </Text>
+      {resume.education.map((edu, index) => (
+        <View key={index} style={styles.entry}>
+          <View style={styles.entryHeader} minPresenceAhead={30}>
+            <Text style={styles.position}>
+              {[edu.qualification, edu.fieldOfStudy].filter(Boolean).join(', ')}
+            </Text>
+            {edu.dates ? <Text style={styles.dates}>{edu.dates}</Text> : null}
+          </View>
+          {(edu.institution || edu.location) && (
+            <Text style={styles.subline}>
+              {[edu.institution, edu.location].filter(Boolean).join(' • ')}
+            </Text>
+          )}
+          {edu.description ? (
+            <Text style={styles.paragraph}>{edu.description}</Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ProjectsBlock({ resume }) {
+  if (!resume.projects.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('projects')}
+      </Text>
+      {resume.projects.map((project, index) => {
+        const safeUrl = getSafeHttpsUrl(project.url);
+        return (
+          <View key={index} style={styles.entry}>
+            <Text style={styles.position} minPresenceAhead={30}>
+              {project.name || ''}
+            </Text>
+            {project.description ? (
+              <Text style={styles.paragraph}>{project.description}</Text>
+            ) : null}
+            {(project.technologies || []).length > 0 ? (
+              <Text style={styles.muted}>
+                Technologies: {project.technologies.join(', ')}
+              </Text>
+            ) : null}
+            {safeUrl ? (
+              <Link src={safeUrl} style={styles.link}>
+                <Text style={styles.muted}>{safeUrl}</Text>
+              </Link>
+            ) : project.url ? (
+              <Text style={styles.muted}>{project.url}</Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function CertificationsBlock({ resume }) {
+  if (!resume.certifications.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('certifications')}
+      </Text>
+      {resume.certifications.map((cert, index) => {
+        const safeUrl = getSafeHttpsUrl(cert.url);
+        return (
+          <Text key={index} style={styles.bullet}>
+            •{' '}
+            {safeUrl ? (
+              <Link src={safeUrl} style={styles.link}>
+                {cert.name}
+              </Link>
+            ) : (
+              cert.name
+            )}
+            {cert.issuer ? ` — ${cert.issuer}` : ''}
+            {cert.date ? ` (${cert.date})` : ''}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
+function AchievementsBlock({ resume }) {
+  if (!resume.achievements.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('achievements')}
+      </Text>
+      {resume.achievements.map((achievement, index) => (
+        <View key={index} style={styles.entry}>
+          <Text style={styles.position} minPresenceAhead={30}>
+            {achievement.title}
+            {achievement.date ? ` (${achievement.date})` : ''}
+          </Text>
+          {achievement.description ? (
+            <Text style={styles.paragraph}>{achievement.description}</Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ReferencesBlock({ resume }) {
+  if (!resume.referencesIncluded) return null;
+  if (!resume.references || !resume.references.length) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        {getSectionLabel('references')}
+      </Text>
+      {resume.references.map((ref, index) => (
+        <View key={index} style={styles.entry}>
+          <Text style={styles.position} minPresenceAhead={30}>
+            {ref.name || ''}
+          </Text>
+          {(ref.title || ref.organization) && (
+            <Text style={styles.subline}>
+              {[ref.title, ref.organization].filter(Boolean).join(' • ')}
+            </Text>
+          )}
+          {ref.relationship ? (
+            <Text style={styles.muted}>Relationship: {ref.relationship}</Text>
+          ) : null}
+          {ref.email ? <Text style={styles.muted}>Email: {ref.email}</Text> : null}
+          {ref.phone ? <Text style={styles.muted}>Phone: {ref.phone}</Text> : null}
+          {ref.notes ? <Text style={styles.muted}>{ref.notes}</Text> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const SECTION_BLOCKS = {
+  summary: SummaryBlock,
+  skills: SkillsBlock,
+  experience: ExperienceBlock,
+  education: EducationBlock,
+  projects: ProjectsBlock,
+  certifications: CertificationsBlock,
+  achievements: AchievementsBlock,
+  references: ReferencesBlock,
+};
+
+export default function ResumeDocument({ resume, profile }) {
   if (!resume || typeof resume !== 'object') return null;
 
-  const {
-    contact = {},
-    summary,
-    skillGroups = [],
-    experience = [],
-    projects = [],
-    education = [],
-    certifications = [],
-    achievements = [],
-  } = resume;
+  const { contact = {} } = resume;
+  const orderedSections = getOrderedSections(resume, profile);
 
   return (
     <Document
@@ -129,165 +336,10 @@ export default function ResumeDocument({ resume }) {
           <ContactLine contact={contact} />
         </View>
 
-        {summary ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Professional Summary
-            </Text>
-            <Text style={styles.paragraph}>{summary}</Text>
-          </View>
-        ) : null}
-
-        {skillGroups.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Skills
-            </Text>
-            {skillGroups.map((group, index) => (
-              <Text key={index} style={styles.skillRow}>
-                <Text style={styles.skillLabel}>{group.label}: </Text>
-                {(group.items || []).join(', ')}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-
-        {experience.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Professional Experience
-            </Text>
-            {experience.map((job, index) => (
-              <View key={index} style={styles.entry}>
-                <View style={styles.entryHeader} minPresenceAhead={30}>
-                  <Text style={styles.position}>{job.position || ''}</Text>
-                  {job.dates ? (
-                    <Text style={styles.dates}>{job.dates}</Text>
-                  ) : null}
-                </View>
-                {(job.company || job.location) && (
-                  <Text style={styles.subline}>
-                    {[job.company, job.location].filter(Boolean).join(' • ')}
-                  </Text>
-                )}
-                {(job.bullets || []).map((bullet, bulletIndex) => (
-                  <Text key={bulletIndex} style={styles.bullet}>
-                    • {bullet}
-                  </Text>
-                ))}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {projects.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Projects
-            </Text>
-            {projects.map((project, index) => {
-              const safeUrl = getSafeHttpsUrl(project.url);
-              return (
-                <View key={index} style={styles.entry}>
-                  <Text style={styles.position} minPresenceAhead={30}>
-                    {project.name || ''}
-                  </Text>
-                  {project.description ? (
-                    <Text style={styles.paragraph}>{project.description}</Text>
-                  ) : null}
-                  {(project.technologies || []).length > 0 ? (
-                    <Text style={styles.muted}>
-                      Technologies: {project.technologies.join(', ')}
-                    </Text>
-                  ) : null}
-                  {safeUrl ? (
-                    <Link src={safeUrl} style={styles.link}>
-                      <Text style={styles.muted}>{safeUrl}</Text>
-                    </Link>
-                  ) : project.url ? (
-                    <Text style={styles.muted}>{project.url}</Text>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-
-        {education.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Education
-            </Text>
-            {education.map((edu, index) => (
-              <View key={index} style={styles.entry}>
-                <View style={styles.entryHeader} minPresenceAhead={30}>
-                  <Text style={styles.position}>
-                    {[edu.qualification, edu.fieldOfStudy]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </Text>
-                  {edu.dates ? (
-                    <Text style={styles.dates}>{edu.dates}</Text>
-                  ) : null}
-                </View>
-                {(edu.institution || edu.location) && (
-                  <Text style={styles.subline}>
-                    {[edu.institution, edu.location].filter(Boolean).join(' • ')}
-                  </Text>
-                )}
-                {edu.description ? (
-                  <Text style={styles.paragraph}>{edu.description}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {certifications.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Certifications
-            </Text>
-            {certifications.map((cert, index) => {
-              const safeUrl = getSafeHttpsUrl(cert.url);
-              return (
-                <Text key={index} style={styles.bullet}>
-                  •{' '}
-                  {safeUrl ? (
-                    <Link src={safeUrl} style={styles.link}>
-                      {cert.name}
-                    </Link>
-                  ) : (
-                    cert.name
-                  )}
-                  {cert.issuer ? ` — ${cert.issuer}` : ''}
-                  {cert.date ? ` (${cert.date})` : ''}
-                </Text>
-              );
-            })}
-          </View>
-        ) : null}
-
-        {achievements.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              Achievements
-            </Text>
-            {achievements.map((achievement, index) => (
-              <View key={index} style={styles.entry}>
-                <Text style={styles.position} minPresenceAhead={30}>
-                  {achievement.title}
-                  {achievement.date ? ` (${achievement.date})` : ''}
-                </Text>
-                {achievement.description ? (
-                  <Text style={styles.paragraph}>
-                    {achievement.description}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {orderedSections.map((section) => {
+          const Block = SECTION_BLOCKS[section];
+          return Block ? <Block key={section} resume={resume} /> : null;
+        })}
       </Page>
     </Document>
   );

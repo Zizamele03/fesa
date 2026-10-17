@@ -60,14 +60,18 @@ function profile() {
       soft: [],
       tools: [],
       languages: [],
+      queryLanguages: [],
+      humanLanguages: [],
       frameworks: [],
       databases: [],
       cloud: [],
+      uncertain: [],
     },
     certifications: [
       { id: 1, name: 'Scrum Master', issuer: 'Scrum.org', date: '2023' },
     ],
     achievements: [],
+    references: [],
   };
 }
 
@@ -88,6 +92,9 @@ function emptyResume(overrides = {}) {
     education: [],
     certifications: [],
     achievements: [],
+    references: [],
+    referencesIncluded: false,
+    userEdited: false,
     ...overrides,
   };
 }
@@ -159,17 +166,22 @@ describe('Resume Truth Lock', () => {
       ],
     });
     const result = validateResumeAgainstProfile(profile(), resume);
-    // Bullet gets removed; fallback to original responsibilities kicks in
     const has99 = result.resume.experience[0].bullets.some((b) => b.includes('99%'));
     expect(has99).toBe(false);
   });
 
-  it('rejects summary that invents a skill', () => {
+  it('rejects summary that invents a skill and falls back to profile summary', () => {
     const resume = emptyResume({
-      summary: 'Expert Kubernetes engineer with Terraform experience.',
+      summary: 'Kubernetes specialist. Terraform expert. Azure architect.',
     });
     const result = validateResumeAgainstProfile(profile(), resume);
-    expect(result.resume.summary).toBe('');
+    // Invented skills must not appear.
+    expect(result.resume.summary).not.toContain('Kubernetes');
+    expect(result.resume.summary).not.toContain('Terraform');
+    expect(result.resume.summary).not.toContain('Azure');
+    // Fallback preserves the profile's own summary.
+    expect(result.resume.summary).toBe('Frontend engineer.');
+    // Violations are recorded.
     expect(result.violations.some((v) => v.field === 'summary')).toBe(true);
   });
 

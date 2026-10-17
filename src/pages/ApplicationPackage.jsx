@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import FormField from '../components/FormField.jsx';
 import GeneratedResume from '../components/GeneratedResume.jsx';
 import GeneratedCoverLetter from '../components/GeneratedCoverLetter.jsx';
+import ResumeEditor from '../components/ResumeEditor.jsx';
 import { loadProfile } from '../services/careerProfileStore.js';
 import {
   getApplication,
@@ -36,6 +37,10 @@ const LENGTH_OPTIONS = [
   { value: 'detailed', label: 'Detailed' },
 ];
 
+function cloneDeep(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 export default function ApplicationPackage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -47,6 +52,9 @@ export default function ApplicationPackage() {
   const [resumeError, setResumeError] = useState('');
   const [resumeViolations, setResumeViolations] = useState([]);
   const [isExportingResume, setIsExportingResume] = useState(false);
+  const [isEditingResume, setIsEditingResume] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState(null);
+  const [resumeSaveError, setResumeSaveError] = useState('');
 
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [letterError, setLetterError] = useState('');
@@ -105,6 +113,14 @@ export default function ApplicationPackage() {
   async function handleGenerateResume() {
     if (!profile || !application) return;
 
+    const hadEdits = Boolean(application.generatedResume?.userEdited);
+    if (hadEdits) {
+      const confirmed = window.confirm(
+        'You have manually edited this resume. Regenerating will replace your edits. Continue?',
+      );
+      if (!confirmed) return;
+    }
+
     setIsGeneratingResume(true);
     setResumeError('');
     setResumeViolations([]);
@@ -117,7 +133,9 @@ export default function ApplicationPackage() {
       });
 
       const { resume: validatedResume, violations: found } =
-        validateResumeAgainstProfile(profile, rawResume);
+        validateResumeAgainstProfile(profile, rawResume, {
+          referencesIncluded: Boolean(application.generatedResume?.referencesIncluded),
+        });
 
       setResumeViolations(found);
 
@@ -138,6 +156,46 @@ export default function ApplicationPackage() {
     }
   }
 
+  function handleStartEditResume() {
+    const resume = application?.generatedResume;
+    if (!resume) return;
+    setResumeDraft(cloneDeep(resume));
+    setIsEditingResume(true);
+    setResumeSaveError('');
+  }
+
+  async function handleSaveResume() {
+    if (!resumeDraft || !application) return;
+
+    setIsGeneratingResume(true);
+    setResumeSaveError('');
+
+    const toSave = {
+      ...resumeDraft,
+      userEdited: true,
+    };
+
+    try {
+      await updateApplication(application.id, { generatedResume: toSave });
+      setApplication({ ...application, generatedResume: toSave });
+      setIsEditingResume(false);
+      setResumeDraft(null);
+    } catch (err) {
+      console.error('Save resume error:', err);
+      setResumeSaveError(
+        'Could not save your edits. Your changes are preserved in this browser session — try saving again.',
+      );
+    } finally {
+      setIsGeneratingResume(false);
+    }
+  }
+
+  function handleCancelEditResume() {
+    setIsEditingResume(false);
+    setResumeDraft(null);
+    setResumeSaveError('');
+  }
+
   async function handleDownloadResume() {
     if (!application?.generatedResume) return;
 
@@ -147,6 +205,7 @@ export default function ApplicationPackage() {
     try {
       await downloadResumePdf({
         resume: application.generatedResume,
+        profile,
         company: application.company,
         jobTitle: application.jobTitle,
       });
@@ -352,24 +411,31 @@ export default function ApplicationPackage() {
       <section className="page-section">
         <div className="section-header-row">
           <h2>Tailored Resume</h2>
-          <div className="button-row">
-            {resume && (
-              <Button
-                variant="secondary"
-                onClick={handleDownloadResume}
-                disabled={isExportingResume}
-              >
-                {isExportingResume ? 'Preparing PDF...' : 'Download Resume PDF'}
+          {!isEditingResume && (
+            <div className="button-row">
+              {resume && (
+                <>
+                  <Button variant="secondary" onClick={handleStartEditResume}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleDownloadResume}
+                    disabled={isExportingResume}
+                  >
+                    {isExportingResume ? 'Preparing PDF...' : 'Download Resume PDF'}
+                  </Button>
+                </>
+              )}
+              <Button onClick={handleGenerateResume} disabled={isGeneratingResume}>
+                {isGeneratingResume
+                  ? 'Generating...'
+                  : resume
+                  ? 'Regenerate Resume'
+                  : 'Generate Resume'}
               </Button>
-            )}
-            <Button onClick={handleGenerateResume} disabled={isGeneratingResume}>
-              {isGeneratingResume
-                ? 'Generating...'
-                : resume
-                ? 'Regenerate Resume'
-                : 'Generate Resume'}
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
 
         {resumeError && (
@@ -391,7 +457,7 @@ export default function ApplicationPackage() {
           </div>
         )}
 
-        {isGeneratingResume && (
+        {isGeneratingResume && !isEditingResume && (
           <div className="profile-status">
             <LoadingState message="Generating tailored resume..." />
           </div>
@@ -406,7 +472,45 @@ export default function ApplicationPackage() {
           />
         )}
 
-        {!isGeneratingResume && resume && <GeneratedResume resume={resume} />}
+        {!isGeneratingResume && resume && !isEditingResume && (
+          <>
+            {resume.userEdited && (
+              <div className="profile-status">
+                <Card>
+                  <p>
+                    This resume has been manually edited. Content is not
+                    re-verified against your Career Profile after editing.
+                  </p>
+                </Card>
+              </div>
+            )}
+            <GeneratedResume resume={resume} profile={profile} />
+          </>
+        )}
+
+        {isEditingResume && resumeDraft && (
+          <Card>
+            <h3>Edit Resume</h3>
+            {resumeSaveError && (
+              <div className="profile-status">
+                <ErrorState title="Save failed" message={resumeSaveError} />
+              </div>
+            )}
+            <ResumeEditor resume={resumeDraft} onChange={setResumeDraft} />
+            <div className="button-row">
+              <Button onClick={handleSaveResume} disabled={isGeneratingResume}>
+                {isGeneratingResume ? 'Saving...' : 'Save'}
+              </Button>
+              <Button variant="secondary" onClick={handleCancelEditResume}>
+                Cancel
+              </Button>
+            </div>
+            <p className="letter-preferences-hint">
+              Saved edits are marked as user-edited and are not re-verified against
+              your Career Profile.
+            </p>
+          </Card>
+        )}
       </section>
 
       <section className="page-section">

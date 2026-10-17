@@ -36,14 +36,9 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-/**
- * Deduplicates an array of strings case-insensitively, preserving the
- * original casing of the first occurrence.
- */
 function dedupeStrings(list) {
   const seen = new Set();
   const out = [];
-
   for (const item of list) {
     const str = asString(item).trim();
     if (!str) continue;
@@ -52,7 +47,6 @@ function dedupeStrings(list) {
     seen.add(key);
     out.push(str);
   }
-
   return out;
 }
 
@@ -118,7 +112,6 @@ function normalizeProjects(projects) {
 function normalizeSkills(skills) {
   const s = asObject(skills);
   const norm = (value) => dedupeStrings(asArray(value));
-
   return {
     technical: norm(s.technical),
     soft: norm(s.soft),
@@ -157,6 +150,21 @@ function normalizeAchievements(achievements) {
   });
 }
 
+function normalizeReferences(references) {
+  return asArray(references).map((item) => {
+    const r = asObject(item);
+    return {
+      name: asString(r.name),
+      title: asString(r.title),
+      organization: asString(r.organization),
+      relationship: asString(r.relationship),
+      email: asString(r.email),
+      phone: asString(r.phone),
+      notes: asString(r.notes),
+    };
+  });
+}
+
 export function normalizeProfile(rawProfile) {
   if (
     !rawProfile ||
@@ -185,6 +193,7 @@ export function normalizeProfile(rawProfile) {
     skills: normalizeSkills(profile.skills),
     certifications: normalizeCertifications(profile.certifications),
     achievements: normalizeAchievements(profile.achievements),
+    references: normalizeReferences(profile.references),
   };
 
   const hasContent =
@@ -195,7 +204,8 @@ export function normalizeProfile(rawProfile) {
     normalized.projects.length > 0 ||
     Object.values(normalized.skills).some((list) => list.length > 0) ||
     normalized.certifications.length > 0 ||
-    normalized.achievements.length > 0;
+    normalized.achievements.length > 0 ||
+    normalized.references.length > 0;
 
   if (!hasContent) {
     throw new Error('AI returned an empty profile with no meaningful data.');

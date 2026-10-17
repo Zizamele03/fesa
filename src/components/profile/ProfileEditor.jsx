@@ -6,6 +6,7 @@ import {
   createEmptyProject,
   createEmptyCertification,
   createEmptyAchievement,
+  createEmptyReference,
 } from '../../data/careerProfileSchema.js';
 import { validateProfileUrl } from '../../utils/urlValidation.js';
 import './ProfileEditor.css';
@@ -164,6 +165,29 @@ export default function ProfileEditor({ profile, onProfileChange }) {
     });
   };
 
+  const handleAddReference = () => {
+    onProfileChange({
+      ...profile,
+      references: [...(profile.references || []), createEmptyReference()],
+    });
+  };
+
+  const handleReferenceChange = (index, field, value) => {
+    const refs = profile.references || [];
+    onProfileChange({
+      ...profile,
+      references: updateArrayItem(refs, index, field, value),
+    });
+  };
+
+  const handleDeleteReference = (index) => {
+    const refs = profile.references || [];
+    onProfileChange({
+      ...profile,
+      references: removeArrayItem(refs, index),
+    });
+  };
+
   const handleSkillChange = (category, index, value) => {
     const list = profile.skills[category] || [];
     const newSkills = {
@@ -190,6 +214,8 @@ export default function ProfileEditor({ profile, onProfileChange }) {
     };
     onProfileChange({ ...profile, skills: newSkills });
   };
+
+  const references = profile.references || [];
 
   return (
     <div className="profile-editor">
@@ -742,6 +768,104 @@ export default function ProfileEditor({ profile, onProfileChange }) {
                     value={achievement.date}
                     onChange={(e) =>
                       handleAchievementChange(index, 'date', e.target.value)
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ))
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="References"
+        action={
+          <Button size="sm" onClick={handleAddReference}>
+            Add Reference
+          </Button>
+        }
+      >
+        <p className="section-empty" style={{ marginBottom: '0.75rem' }}>
+          References are optional. They are stored on your device and never sent
+          to the AI provider. You choose whether to include them in each resume.
+        </p>
+        {references.length === 0 ? (
+          <p className="section-empty">No references saved yet.</p>
+        ) : (
+          references.map((ref, index) => (
+            <div className="editor-item" key={index}>
+              <div className="editor-item-header">
+                <h3>{ref.name || 'Reference'}</h3>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDeleteReference(index)}
+                >
+                  Delete
+                </Button>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Name
+                  <input
+                    value={ref.name}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'name', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Title
+                  <input
+                    value={ref.title}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'title', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Organization
+                  <input
+                    value={ref.organization}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'organization', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Relationship
+                  <input
+                    value={ref.relationship}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'relationship', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={ref.email}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'email', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Phone
+                  <input
+                    value={ref.phone}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'phone', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Notes
+                  <textarea
+                    value={ref.notes}
+                    onChange={(e) =>
+                      handleReferenceChange(index, 'notes', e.target.value)
                     }
                   />
                 </label>

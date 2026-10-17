@@ -1,0 +1,126 @@
+.resume-editor .resume-editor-entry {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+}
+
+.resume-editor .resume-editor-entry:last-child {
+  margin-bottom: 0;
+}
+
+.resume-editor .resume-editor-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.resume-editor .resume-editor-entry-header h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.resume-editor .resume-editor-title-input {
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-editor .resume-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.resume-editor .resume-editor-grid label,
+.resume-editor .resume-editor-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.resume-editor .resume-editor-full {
+  margin-top: 0.75rem;
+}
+
+.resume-editor input,
+.resume-editor textarea {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-text);
+  background: #fff;
+}
+
+.resume-editor .resume-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.resume-editor .resume-editor-list-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.resume-editor .resume-editor-list-row input,
+.resume-editor .resume-editor-list-row textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-editor .resume-editor-bullets {
+  margin-top: 0.75rem;
+}
+
+.resume-editor .resume-editor-bullets-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.resume-editor .resume-editor-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.resume-editor .resume-editor-hint {
+  margin-top: 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.resume-editor .section-empty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.resume-editor .field-error {
+  font-size: 0.8rem;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+@media (max-width: 899px) {
+  .resume-editor .resume-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}

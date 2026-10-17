@@ -1,6 +1,7 @@
 import { getCanonicalSkillSet, containsPhrase } from './truthLock.js';
 
 const GENERAL_STOPWORDS = new Set([
+  // Articles, pronouns, prepositions, conjunctions, auxiliary verbs
   'the','and','for','with','using','from','into','that','this','which',
   'our','their','they','was','were','has','have','had','did','done',
   'doing','will','would','should','could','can','may','might','must',
@@ -12,6 +13,33 @@ const GENERAL_STOPWORDS = new Set([
   'do','does','to','of','in','on','at','by','so','if','as','an','a',
   'i','me','my','we','us','you','your','new','current','various',
   'several','multiple','other','another','same','each','every',
+
+  // Common sentence-starting polite / formal words
+  'thank','thanks','please','dear','kind','regards','sincerely','best',
+  'warm','yours','hello','hi','hey','good','great','excellent',
+  'wonderful','amazing','awesome',
+
+  // Common verbs often used at sentence start
+  'using','utilizing','leveraging','applying','employing',
+  'working','developing','building','creating','designing','implementing',
+  'delivering','managing','leading','coordinating','executing','performing',
+  'achieving','accomplishing','completing','finishing','finalizing',
+  'bringing','taking','giving','making','doing','having','being',
+
+  // Transition / discourse markers
+  'however','therefore','thus','hence','meanwhile','otherwise',
+  'consequently','accordingly','nevertheless','nonetheless',
+  'also','additionally','furthermore','moreover','besides','further',
+
+  // Time markers
+  'recently','currently','presently','finally','initially',
+  'originally','previously','formerly','now','soon','later',
+  'eventually','subsequently',
+
+  // Subordinating conjunctions / participial openers
+  'although','though','whereas','while','whilst','because','since',
+  'unless','whether','given','considering','regarding','concerning',
+  'following','including','excluding','provided','assuming','supposing',
 ]);
 
 export function collectKnownEntities(profile) {
@@ -30,22 +58,16 @@ export function collectKnownEntities(profile) {
   for (const list of Object.values(profile.skills || {})) {
     for (const skill of Array.isArray(list) ? list : []) add(skill);
   }
-
   for (const job of profile.experience || []) {
     add(job.company);
     add(job.position);
     for (const tech of job.technologies || []) add(tech);
   }
-
   for (const project of profile.projects || []) {
     add(project.name);
     for (const tech of project.technologies || []) add(tech);
   }
-
-  for (const edu of profile.education || []) {
-    add(edu.institution);
-  }
-
+  for (const edu of profile.education || []) add(edu.institution);
   for (const cert of profile.certifications || []) {
     add(cert.name);
     add(cert.issuer);
@@ -58,8 +80,6 @@ export function collectKnownEntities(profile) {
  * Builds a set of terms that are allowed to appear in generated text even
  * though they are not present in the Career Profile. Used for user-supplied
  * context such as the target company name and job title.
- *
- * Entries here are treated as trusted and skip the source-text check.
  */
 export function buildTrustedTerms(context = {}) {
   const trusted = new Set();
@@ -67,11 +87,7 @@ export function buildTrustedTerms(context = {}) {
   const add = (value) => {
     const str = String(value || '').trim();
     if (!str) return;
-
-    // Full phrase
     trusted.add(str.toLowerCase());
-
-    // Individual words of length >= 3
     for (const word of str.split(/\s+/)) {
       const clean = word.replace(/[^A-Za-z0-9+#.-]/g, '');
       if (clean.length >= 3) trusted.add(clean.toLowerCase());
@@ -95,10 +111,12 @@ export function extractKeyTerms(text, knownEntities) {
     if (containsPhrase(raw, entity)) terms.add(entity);
   }
 
+  // Extract capitalized words (potential proper nouns / technical terms).
+  // Position 0 is included on purpose — otherwise sentences like
+  // "Kubernetes specialist." would pass validation despite the invented skill.
+  // Common English words that start sentences are filtered via stopwords.
   const words = raw.split(/\s+/);
   for (let i = 0; i < words.length; i += 1) {
-    if (i === 0) continue;
-
     const cleaned = words[i]
       .replace(/[^A-Za-z0-9+#.-]/g, '')
       .replace(/^\.+|\.+$/g, '');
@@ -112,13 +130,6 @@ export function extractKeyTerms(text, knownEntities) {
   return terms;
 }
 
-/**
- * Validates whether the terms in `text` are supported by `sourceText`.
- *
- * `trustedTerms` (optional) is a set of terms that are always considered
- * supported, even if they do not appear in the source. Used for user-supplied
- * context like the target company name and job title.
- */
 export function validateTextAgainstSource(
   text,
   sourceText,

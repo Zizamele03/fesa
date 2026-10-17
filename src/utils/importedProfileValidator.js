@@ -5,6 +5,7 @@ import {
   createEmptyExperience,
   createEmptyProfile,
   createEmptyProject,
+  createEmptyReference,
 } from '../data/careerProfileSchema.js';
 
 function asString(value, fallback = '') {
@@ -139,6 +140,22 @@ function normalizeAchievements(achievements) {
   });
 }
 
+function normalizeReferences(references) {
+  return asArray(references).map((item) => {
+    const source = asObject(item);
+    const empty = createEmptyReference();
+    return {
+      name: asString(source.name, empty.name),
+      title: asString(source.title, empty.title),
+      organization: asString(source.organization, empty.organization),
+      relationship: asString(source.relationship, empty.relationship),
+      email: asString(source.email, empty.email),
+      phone: asString(source.phone, empty.phone),
+      notes: asString(source.notes, empty.notes),
+    };
+  });
+}
+
 export function normalizeImportedProfile(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('Imported data must be a JSON object.');
@@ -183,5 +200,6 @@ export function normalizeImportedProfile(input) {
     achievements: normalizeAchievements(
       candidate.achievements || empty.achievements,
     ),
+    references: normalizeReferences(candidate.references || empty.references),
   };
 }
